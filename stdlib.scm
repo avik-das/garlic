@@ -17,3 +17,8 @@
         (lambda (f ls) (if ls
                            (cons (f (car ls)) (map f (cdr ls)))
                            (quote ())) ))
+
+(define length
+        (lambda (ls) (if ls
+                         (+ 1 (length (cdr ls)))
+                         0)) )
