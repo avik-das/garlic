@@ -534,7 +534,10 @@ end
 
 ## MAIN ########################################################################
 
-inp = File.read("test.scm")
+# TODO: check arguments (possibly read from stdin)
+# TODO: allow outputting to a different intermediate .s file
+
+inp = File.read(ARGV[0])
 parsed = Scheme.new.parse(inp)
 ast = AST.construct_from_parse_tree(parsed)
 require 'pp'
