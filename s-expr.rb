@@ -2,6 +2,7 @@
 
 require 'parslet'
 require 'singleton'
+require 'digest/md5'
 
 ## INITIAL PARSER ##############################################################
 
@@ -291,38 +292,254 @@ module AST
   end
 end
 
-## MAIN (TESTING) ##############################################################
+## NATIVE CODE GENERATION ######################################################
 
-inp = File.read("stdlib.scm")
-parsed = Scheme.new.parse(inp)
-ast = AST.construct_from_parse_tree(parsed)
-require 'pp'
-pp ast
-exit
+module AST
+  class Program
+    def codegen(filename)
+      vm = VM::VM.new(filename)
+
+      @statements.each do |statement|
+        statement.codegen(vm)
+      end
+
+      vm.commit
+    end
+  end
+
+  class Var < Node
+    def codegen(vm)
+      varname = vm.addvarname(self)
+
+      vm.argframe
+      vm.asm "        mov     $#{varname}, %rsi"
+      vm.asm "        call    find_in_frame"
+    end
+  end
+
+  class IntVal < Node
+    def codegen(vm)
+      # TODO: large numbers
+      val = (@value << 1) | 0x1
+      vm.asm "        mov     $#{val}, %rax"
+    end
+  end
+
+  class TrueVal < Node
+    def codegen(vm)
+      # TODO
+    end
+  end
+
+  class FalseVal < Node
+    def codegen(vm)
+      # TODO
+    end
+  end
+
+  class Definition < SpecializedNode
+    def codegen(vm)
+      # TODO
+
+      varname = vm.addvarname(@name)
+      @value.codegen(vm)
+      # now the value is in %rax
+      vm.argframe
+      vm.asm "        mov     $#{varname}, %rsi"
+      vm.asm "        mov     %rax, %rdx"
+      vm.asm "        call    add_to_frame"
+    end
+  end
+
+  class Lambda < SpecializedNode
+    def codegen(vm)
+      # TODO
+      vm.asm "        mov     $1, %rax # codegen'ing lambda"
+    end
+  end
+
+  class FunctionCall < SpecializedNode
+    ARG_REGISTERS = [
+      "%rdi",
+      "%rsi",
+      "%rdx",
+      "%rcx",
+      "%r8",
+      "%r9"
+    ]
+
+    def codegen(vm)
+      # First, generate code for each argument and push it onto the stack in
+      # reverse order. This is because arguments that don't fit in the
+      # registers are pushed onto the stack from right to left. Additionally,
+      # after all the arguments have been pushed onto the stack, the ones that
+      # fit in the registers can be popped off one by one before calling the
+      # function.
+
+      @args.reverse.each do |arg|
+        arg.codegen(vm)
+        vm.push("%rax")
+      end
+
+      # Evaluating the expression in order to get the function pointer may wipe
+      # out registers, so we can't place the arguments in the registers just
+      # yet.
+
+      @func.codegen(vm)
+
+      # Now that the function is available in %rax, we can start pulling out
+      # the arguments into the registers. Recall that the top of the stack
+      # contains the first argument, so we can pop in the same order as the
+      # list of registers.
+      #
+      # However, don't go and pop everything into the registers if there are
+      # only a few arguments!
+
+      @args.zip(ARG_REGISTERS).each do |_, reg|
+        vm.pop(reg)
+      end
+
+      # TODO: create new frame!
+      # TODO: align stack pointer
+
+      vm.asm "        call    *%rax"
+    end
+  end
+
+  class If < SpecializedNode
+    def codegen(vm)
+      # TODO
+    end
+  end
+end
+
+module VM
+  class VM
+    def initialize(filename)
+      @filename = filename
+      @statements = []
+      @varnames = {}
+      @frame_offsets = [0]
+
+      prologue
+    end
+
+    def prologue
+      asm("# " + ("-" * 77))
+      asm "# compiled.s"
+      asm("# " + ("-" * 77))
+      asm ""
+      asm "        .global main"
+      asm ""
+      asm "        .text"
+      asm "main:"
+      asm "        call    new_root_frame"
+      asm "        push    %rax"
+    end
+
+    def epilogue
+      asm ""
+      asm "        pop     %rax"
+      asm "        mov     $0, %rax"
+      asm "        ret"
+      asm ""
+
+      @varnames.each do |name, label|
+        asm "#{label}:"
+        asm "        .asciz  \"#{name}\""
+      end
+    end
+
+    def commit
+      epilogue
+
+      File.open(@filename, 'w') do |f|
+        f.puts(@statements.join("\n"))
+      end
+    end
+
+    def addvarname(name)
+      name_str = name.name.to_s
+
+      if @varnames.has_key?(name_str)
+        @varnames[name_str]
+      else
+        label = "var_#{Digest::MD5.hexdigest(name_str)}"
+        @varnames[name_str] = label
+        label
+      end
+    end
+
+    def push(reg = nil)
+      if reg.nil?
+        asm "        sub     $8, %rsp"
+      else
+        asm "        push    #{reg}"
+      end
+
+      last = @frame_offsets.pop
+      @frame_offsets.push(last + 8)
+    end
+
+    def pop(reg = nil)
+      if reg.nil?
+        asm "        add     $8, %rsp"
+      else
+        asm "        pop     #{reg}"
+      end
+
+      last = @frame_offsets.pop
+      @frame_offsets.push(last - 8)
+    end
+
+    def argframe
+      offset = @frame_offsets.last
+      asm "        add     $#{offset}, %rsp" if offset > 0
+      asm "        mov     (%rsp), %rdi"
+      asm "        sub     $#{offset}, %rsp" if offset > 0
+    end
+
+    def asm(statement)
+      @statements << statement
+    end
+
+    #def newframe(parent = nil)
+    #  # push parent to stack
+    #  # call newframe function
+    #  # push address of new frame onto stack
+    #end
+
+    #def lookupvar(frame, var)
+    #  # push frame to stack
+    #  # push var.name to stack
+    #  # call lookup function
+    #end
+
+    #def addvar(var)
+    #  # push frame to stack
+    #  # push var.name to stack
+    #  # push value to stack
+    #  # call addvar function
+    #end
+
+    #def fncall(fn, *args)
+    #  # check arity vs. args
+    #  # create new frame with fn's parent frame as parent
+    #  # add args to frame
+    #  # push frame to stack
+    #  # jmp to fn's address
+    #end
+  end
+end
 
 ## MAIN ########################################################################
 
-env = Env.new
-stdlib = File.read("stdlib.scm")
-parse(stdlib).eval(env)
-
-puts "s-expr 0.0.1 - by Avik Das"
-puts "Press Ctrl-D to exit"
-puts
-
-while true
-  print "> "
-  inp = gets
-
-  break unless inp
-
-  parsed = parse(inp)
-
-  begin
-    puts parsed.eval(env).inspect
-  rescue EvalException => e
-    puts "Err: #{e.to_s}"
-  end
-end
+inp = File.read("test.scm")
+parsed = Scheme.new.parse(inp)
+ast = AST.construct_from_parse_tree(parsed)
+require 'pp'
+#pp ast
+ast.codegen("compiled.s")
+exit
 
 # vim: ts=2 sw=2 :
