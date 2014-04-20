@@ -10,6 +10,7 @@ Quick Start
 
 ```sh
 git clone https://github.com/avik-das/scheme-compiler.git
+cd scheme-compiler
 ./s-expr.rb test.scm
 gcc -s compiled.s stdlib.c hashmap.c # later, this will be automated
 ./a.out
