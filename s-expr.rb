@@ -3,6 +3,7 @@
 require 'parslet'
 require 'singleton'
 require 'digest/md5'
+require 'securerandom'
 
 ## INITIAL PARSER ##############################################################
 
@@ -295,6 +296,19 @@ end
 ## NATIVE CODE GENERATION ######################################################
 
 module AST
+  # The registers used for passing arguments to function calls, in the order of
+  # priority. That is, the first argument of a function goes into %rdi, then
+  # the second argument goes into %rsi, etc. The rest are passed on the stack,
+  # from right to left.
+  ARG_REGISTERS = [
+    "%rdi",
+    "%rsi",
+    "%rdx",
+    "%rcx",
+    "%r8",
+    "%r9"
+  ]
+
   class Program
     def codegen(filename)
       vm = VM::VM.new(filename)
@@ -339,8 +353,6 @@ module AST
 
   class Definition < SpecializedNode
     def codegen(vm)
-      # TODO
-
       varname = vm.addvarname(@name)
       @value.codegen(vm)
       # now the value is in %rax
@@ -359,15 +371,6 @@ module AST
   end
 
   class FunctionCall < SpecializedNode
-    ARG_REGISTERS = [
-      "%rdi",
-      "%rsi",
-      "%rdx",
-      "%rcx",
-      "%r8",
-      "%r9"
-    ]
-
     def codegen(vm)
       # First, generate code for each argument and push it onto the stack in
       # reverse order. This is because arguments that don't fit in the
@@ -381,28 +384,15 @@ module AST
         vm.push("%rax")
       end
 
-      # Evaluating the expression in order to get the function pointer may wipe
-      # out registers, so we can't place the arguments in the registers just
-      # yet.
-
+      # Evaluate the expression in order to get the wrapped function pointer.
       @func.codegen(vm)
 
-      # Now that the function is available in %rax, we can start pulling out
-      # the arguments into the registers. Recall that the top of the stack
-      # contains the first argument, so we can pop in the same order as the
-      # list of registers.
-      #
-      # However, don't go and pop everything into the registers if there are
-      # only a few arguments!
-
-      @args.zip(ARG_REGISTERS).each do |_, reg|
-        vm.pop(reg)
-      end
-
-      # TODO: create new frame!
       # TODO: align stack pointer
 
-      vm.asm "        call    *%rax"
+      vm.asm "        mov     %rax, %rdi"
+      vm.asm "        call    scm_fncall"
+
+      vm.popn(@args.size)
     end
   end
 
@@ -490,6 +480,13 @@ module VM
 
       last = @frame_offsets.pop
       @frame_offsets.push(last - 8)
+    end
+
+    def popn(n)
+      asm "        add     $#{n * 8}, %rsp"
+
+      last = @frame_offsets.pop
+      @frame_offsets.push(last - n * 8)
     end
 
     def argframe
