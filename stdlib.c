@@ -119,13 +119,23 @@ inline int value_is_nil(scm_value_t value) {
     return value == 0;
 }
 
+inline int value_is_true(scm_value_t value) {
+    return ((int64_t) value) == 2;
+}
+
+inline int value_is_false(scm_value_t value) {
+    return ((int64_t) value) == 4;
+}
+
 inline int value_is_fixnum(scm_value_t value) {
     return ((int64_t) value) & 0x1;
 }
 
 inline int value_is_primitive(scm_value_t value) {
     return value_is_nil(value) ||
-        value_is_fixnum(value);
+        value_is_fixnum(value) ||
+        value_is_true(value) ||
+        value_is_false(value);
 }
 
 inline int value_is_lambda(scm_value_t value) {
@@ -238,6 +248,10 @@ void display_cons_inner(struct scm_cons *cons) {
 scm_value_t stdlib_impl_display(scm_value_t value) {
     if (value_is_nil(value)) {
         printf("()");
+    } else if (value_is_true(value)) {
+        printf("#t");
+    } else if (value_is_false(value)) {
+        printf("#f");
     } else if (value_is_fixnum(value)) {
         printf("%ld", ((int64_t) value) >> 1);
     } else if (value_is_lambda(value)) {

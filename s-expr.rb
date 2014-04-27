@@ -472,13 +472,13 @@ module AST
 
   class TrueVal < Node
     def codegen(vm)
-      # TODO
+      vm.asm "        mov     $2, %rax"
     end
   end
 
   class FalseVal < Node
     def codegen(vm)
-      # TODO
+      vm.asm "        mov     $4, %rax"
     end
   end
 
@@ -583,7 +583,21 @@ module AST
 
   class If < SpecializedNode
     def codegen(vm)
-      # TODO
+      label = vm.gencondname
+
+      @cond.codegen(vm)
+
+      vm.asm "        cmp     $4, %rax"
+      vm.asm "        je      #{label}_false"
+
+      @true_expr.codegen(vm)
+
+      vm.asm "        jmp     #{label}_end"
+      vm.asm "#{label}_false:"
+
+      @false_expr.codegen(vm)
+
+      vm.asm "#{label}_end:"
     end
   end
 end
@@ -597,6 +611,7 @@ module VM
       @quotedatoms = {}
       @frame_offsets = [0]
       @currfn = 0
+      @currcond = 0
 
       prologue
     end
@@ -680,6 +695,12 @@ module VM
     def genfnname
       name = "fn_#{@currfn}"
       @currfn += 1
+      name
+    end
+
+    def gencondname
+      name = "cond_#{@currcond}"
+      @currcond += 1
       name
     end
 

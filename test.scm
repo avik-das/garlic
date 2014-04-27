@@ -44,6 +44,8 @@
 
 (display 'a) (newline)
 (display '123) (newline)
+(display '#t) (newline)
+(display '#f) (newline)
 (display '(1 2 3)) (newline)
 (display '(1 '(2 3) 4)) (newline)
 
@@ -62,4 +64,23 @@
 (display (cdr threecons)) (newline)
 
 (display (cons 'a (cons 'b (cons 'c '())))) (newline)
-(display '(a b c))
+(display '(a b c)) (newline)
+
+(newline)
+
+;; Booleans and onditionals.
+
+(define not
+        (lambda (val) (if val #f #t)))
+
+(display #t) (newline)
+(display #f) (newline)
+(display (if #t 'correct 'wrong)) (newline)
+(display (if #f 'wrong 'correct)) (newline)
+(display (if '() 'correct 'wrong)) (newline)
+(display (if 0 'correct 'wrong)) (newline)
+(display (if 1 'correct 'wrong)) (newline)
+(display (if (not #f) 'correct 'wrong)) (newline)
+(display (if (not #t) 'wrong 'correct)) (newline)
+(display (if (not 0) 'wrong 'correct)) (newline)
+(display (if (not 1) 'wrong 'correct))
