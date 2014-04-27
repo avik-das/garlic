@@ -204,14 +204,16 @@ module AST
         first = @children.first
         first_is_var = first.is_a?(Var)
 
+        filtered_children = @children.reject { |child| child.is_a?(Comment) }
+
         if first_is_var
           case first.name
             when :define
-              return Definition.new(*children)
+              return Definition.new(*filtered_children)
             when :lambda
-              return Lambda.new(*children)
+              return Lambda.new(*filtered_children)
             when :if
-              return If.new(*children)
+              return If.new(*filtered_children)
           end
         end
 

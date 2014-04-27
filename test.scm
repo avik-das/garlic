@@ -1,5 +1,6 @@
 ;; Adds the three numberical inputs.
 (define addthreenums
+  ;; This doesn't use the procedure definition syntax
   (lambda (a b c)
     (+ a (+ b c))) )
 
@@ -10,6 +11,7 @@
 (define addfournums
   (lambda (a b c d)
     (+ ((lambda (d c) (+ d c)) a b)
+       ;; really complicated bindings!
        ((lambda (b a) (+ b a)) c d)) ))
 
 ;; Given a number, returns a function that takes in another number and adds the
