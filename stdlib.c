@@ -8,6 +8,7 @@ typedef void * scm_value_t;
 
 scm_value_t stdlib_sum(scm_value_t a_val, scm_value_t b_val);
 scm_value_t stdlib_display(scm_value_t value);
+scm_value_t stdlib_newline();
 
 /** ENVIRONMENT FRAMES ********************************************************/
 
@@ -19,12 +20,16 @@ struct frame_t {
 scm_value_t make_fn(struct frame_t *parent_frame, void *fnpointer);
 
 scm_value_t find_in_frame(struct frame_t *frame, char *str) {
+    //printf("looking up var \"%s\" in frame %p!\n", str, frame);
     scm_value_t *value_ptr = (scm_value_t *) malloc(sizeof(int64_t));
-    hashmap_get(frame->vars, str, value_ptr);
+    int get_result = hashmap_get(frame->vars, str, value_ptr);
+
+    if (get_result == MAP_MISSING && frame->parent) {
+        *value_ptr = find_in_frame(frame->parent, str);
+    }
+
     //printf("looking up var \"%s\" in frame %p! Got %p!\n", str, frame,
     //        *value_ptr);
-
-    // TODO: look up in the parent frame if necessary
 
     return *value_ptr;
 }
@@ -47,6 +52,7 @@ struct frame_t * new_root_frame() {
 
     add_to_frame(frame, "+", make_fn(frame, stdlib_sum));
     add_to_frame(frame, "display", make_fn(frame, stdlib_display));
+    add_to_frame(frame, "newline", make_fn(frame, stdlib_newline));
 
     return frame;
 }
@@ -95,6 +101,9 @@ scm_value_t make_fn(struct frame_t *parent_frame, void *fnpointer) {
     fn->parent_frame = parent_frame;
     fn->function = fnpointer;
 
+    //printf("returning wrapped lambda %p pointing to %p and parent frame %p\n",
+    //        fn, fnpointer, parent_frame);
+
     return fn;
 }
 
@@ -118,4 +127,9 @@ scm_value_t stdlib_impl_display(scm_value_t value) {
 
     // TODO: return nil
     return NULL;
+}
+
+scm_value_t stdlib_impl_newline() {
+    printf("\n");
+    return NULL; // TODO: return nil
 }

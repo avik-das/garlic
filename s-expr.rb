@@ -365,8 +365,62 @@ module AST
 
   class Lambda < SpecializedNode
     def codegen(vm)
-      # TODO
-      vm.asm "        mov     $1, %rax # codegen'ing lambda"
+      # Generating code for a lambda is a bit involved, so it's good to list
+      # out the steps.
+      #
+      # 1. Immediately jmp ahead to after the generated code that will be
+      #    called when the lambda is invoked. No need to call it now!
+      #
+      # 2. For each argument on the stack, generate code to add it to the
+      #    current frame. Note that when the lambda is being invoked, the
+      #    scm_fncall function has already created a new frame using the
+      #    lambda's parent frame, so we'll be using that frame.
+      #
+      # 3. Generate code to run the lambda body.
+      #
+      # 4. Generate code to return from the function.
+      #
+      # 5. Now, we're at the point we jmp'ed to earlier. This code *will* be
+      #    executed when the lambda is defined. Here, we'll generate code to
+      #    create a wrapped lambda using the make_fn function. The result is
+      #    stored in %rax, and we're done.
+      #
+      # One thing to watch out for: when scm_fncall invokes the lambda body, a
+      # new frame has already been created and pushed onto the stack. Thus, we
+      # have to reset the offset on the stack to the current frame in our VM.
+
+      name = vm.genfnname
+      endname = "#{name}_end"
+
+      vm.asm "        jmp     #{endname}"
+      vm.asm "#{name}:"
+
+      # lambda body
+
+      vm.fnstart
+
+      params.each_with_index do |param, i|
+        varname = vm.addvarname(param)
+        offset = 24 + (i * 8)
+
+        vm.argframe
+        vm.asm "        mov     $#{varname}, %rsi"
+        vm.asm "        mov     #{offset}(%rsp), %rdx"
+        vm.asm "        call    add_to_frame"
+      end
+
+      body.codegen(vm)
+
+      vm.fnend
+
+      vm.asm "        ret"
+      vm.asm "#{endname}:"
+
+      # generate the actual lambda
+
+      vm.argframe
+      vm.asm "        mov     $#{name}, %rsi"
+      vm.asm "        call    make_fn"
     end
   end
 
@@ -410,6 +464,7 @@ module VM
       @statements = []
       @varnames = {}
       @frame_offsets = [0]
+      @currfn = 0
 
       prologue
     end
@@ -460,6 +515,12 @@ module VM
       end
     end
 
+    def genfnname
+      name = "fn_#{@currfn}"
+      @currfn += 1
+      name
+    end
+
     def push(reg = nil)
       if reg.nil?
         asm "        sub     $8, %rsp"
@@ -494,6 +555,14 @@ module VM
       asm "        add     $#{offset}, %rsp" if offset > 0
       asm "        mov     (%rsp), %rdi"
       asm "        sub     $#{offset}, %rsp" if offset > 0
+    end
+
+    def fnstart
+      @frame_offsets.push(8)
+    end
+
+    def fnend
+      @frame_offsets.pop
     end
 
     def asm(statement)
