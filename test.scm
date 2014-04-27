@@ -42,6 +42,20 @@
 
 (newline)
 
+;; Function definition syntax
+
+(define (f x)
+  ;; Now we're using the function definition syntax
+  (+ 1 x))
+
+(define (g a b c d)
+  (cons a (cons b (cons c (cons d '())))) )
+
+(display (f 2)) (newline)
+(display (g 'this 'is 'a 'list))
+
+(newline)
+
 ;; Quoted values
 
 (display 'a) (newline)

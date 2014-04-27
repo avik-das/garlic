@@ -264,14 +264,28 @@ module AST
             "(#{children.join(" ")})")
       end
 
-      unless children[1].is_a?(Var)
+      if children[1].is_a?(Var)
+        @name = children[1]
+        @value = children[2].specialize
+      elsif children[1].is_a?(NestedNode)
+        signature = children[1].children
+
+        if signature.empty?
+          raise ParseException.new("Definition must have a name")
+        end
+
+        @name = signature[0]
+
+        @value = Lambda.new(
+          :lambda,
+          NestedNode.new(*signature[1, signature.size - 1]),
+          children[2]
+        )
+      else
         raise ParseException.new(
-          "Definition name must be a var, got: " +
+          "Definition name must be a var or list, got: " +
             "#{children[1]} of type #{children[1].class}")
       end
-
-      @name = children[1]
-      @value = children[2].specialize
     end
 
     def to_s
