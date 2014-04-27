@@ -36,4 +36,12 @@
 (newline)
 
 ;; Just for kicks, displaying a lambda.
-(display closure)
+(display closure) (newline)
+
+(newline)
+
+;; Cons cells.
+(define threecons (cons 1 (cons 2 3)))
+(display threecons) (newline)
+(display (car threecons)) (newline)
+(display (cdr threecons))

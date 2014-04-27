@@ -3,6 +3,11 @@
 # stdlib functions
 
          .global stdlib_sum
+
+         .global stdlib_cons
+         .global stdlib_car
+         .global stdlib_cdr
+
          .global stdlib_display
          .global stdlib_newline
 
@@ -32,6 +37,25 @@ stdlib_sum:
         mov     24(%rsp), %rdi
         mov     32(%rsp), %rsi
         call    stdlib_impl_sum
+        ret
+
+stdlib_cons:
+        # ignore the pushed frame
+        mov     24(%rsp), %rdi
+        mov     32(%rsp), %rsi
+        call    make_cons
+        ret
+
+stdlib_car:
+        # ignore the pushed frame
+        mov     24(%rsp), %rax
+        mov     8(%rax), %rax
+        ret
+
+stdlib_cdr:
+        # ignore the pushed frame
+        mov     24(%rsp), %rax
+        mov     16(%rax), %rax
         ret
 
 stdlib_display:

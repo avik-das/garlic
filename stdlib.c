@@ -7,8 +7,17 @@
 typedef void * scm_value_t;
 
 scm_value_t stdlib_sum(scm_value_t a_val, scm_value_t b_val);
+
+scm_value_t stdlib_cons(scm_value_t car_val, scm_value_t cdr_val);
+scm_value_t stdlib_car(scm_value_t cons_val);
+scm_value_t stdlib_cdr(scm_value_t cons_val);
+
 scm_value_t stdlib_display(scm_value_t value);
 scm_value_t stdlib_newline();
+
+scm_value_t stdlib_impl_sum(scm_value_t a_val, scm_value_t b_val);
+scm_value_t stdlib_impl_display(scm_value_t value);
+scm_value_t stdlib_impl_newline();
 
 /** ENVIRONMENT FRAMES ********************************************************/
 
@@ -24,8 +33,13 @@ scm_value_t find_in_frame(struct frame_t *frame, char *str) {
     scm_value_t *value_ptr = (scm_value_t *) malloc(sizeof(int64_t));
     int get_result = hashmap_get(frame->vars, str, value_ptr);
 
-    if (get_result == MAP_MISSING && frame->parent) {
-        *value_ptr = find_in_frame(frame->parent, str);
+    if (get_result == MAP_MISSING) {
+        if (frame->parent) {
+            *value_ptr = find_in_frame(frame->parent, str);
+        } else {
+            printf("ERROR: undefined variable \"%s\"\n", str);
+            exit(1);
+        }
     }
 
     //printf("looking up var \"%s\" in frame %p! Got %p!\n", str, frame,
@@ -51,6 +65,11 @@ struct frame_t * new_root_frame() {
     struct frame_t *frame = new_frame();
 
     add_to_frame(frame, "+", make_fn(frame, stdlib_sum));
+
+    add_to_frame(frame, "cons", make_fn(frame, stdlib_cons));
+    add_to_frame(frame, "car", make_fn(frame, stdlib_car));
+    add_to_frame(frame, "cdr", make_fn(frame, stdlib_cdr));
+
     add_to_frame(frame, "display", make_fn(frame, stdlib_display));
     add_to_frame(frame, "newline", make_fn(frame, stdlib_newline));
 
@@ -68,7 +87,8 @@ struct frame_t * new_frame_with_parent(struct frame_t *parent) {
 /** STANDARD TYPES ************************************************************/
 
 enum scm_value_type {
-    SCM_TYPE_LAMBDA = 0
+    SCM_TYPE_LAMBDA = 0,
+    SCM_TYPE_CONS
 };
 
 struct scm_value {
@@ -81,6 +101,12 @@ struct scm_lambda {
     void *function;
 };
 
+struct scm_cons {
+    struct scm_value super;
+    scm_value_t car;
+    scm_value_t cdr;
+};
+
 inline int value_is_fixnum(scm_value_t value) {
     return ((int64_t) value) & 0x1;
 }
@@ -91,6 +117,14 @@ inline int value_is_lambda(scm_value_t value) {
     }
 
     return ((struct scm_value *) value)->type == SCM_TYPE_LAMBDA;
+}
+
+inline int value_is_cons(scm_value_t value) {
+    if (value_is_fixnum(value)) {
+        return 0;
+    }
+
+    return ((struct scm_value *) value)->type == SCM_TYPE_CONS;
 }
 
 scm_value_t make_fn(struct frame_t *parent_frame, void *fnpointer) {
@@ -107,6 +141,19 @@ scm_value_t make_fn(struct frame_t *parent_frame, void *fnpointer) {
     return fn;
 }
 
+scm_value_t make_cons(scm_value_t car_val, scm_value_t cdr_val) {
+    struct scm_cons *cons = (struct scm_cons *)
+        malloc(sizeof(struct scm_cons));
+
+    cons->super.type = SCM_TYPE_CONS;
+    cons->car = car_val;
+    cons->cdr = cdr_val;
+
+    //printf("returning cons %p (%p . %p)\n", cons, car_val, cdr_val);
+
+    return cons;
+}
+
 /** STANDARD FUNCTIONS ********************************************************/
 
 scm_value_t stdlib_impl_sum(scm_value_t a_val, scm_value_t b_val) {
@@ -118,12 +165,30 @@ scm_value_t stdlib_impl_sum(scm_value_t a_val, scm_value_t b_val) {
     return (scm_value_t) (c | 1);
 }
 
+void display_cons_inner(struct scm_cons *cons) {
+    stdlib_impl_display(cons->car);
+
+    if (value_is_cons(cons->cdr)) {
+        printf(" ");
+        display_cons_inner((struct scm_cons *) cons->cdr);
+    } else {
+        printf(" . ");
+        stdlib_impl_display(cons->cdr);
+    }
+}
+
 // TODO: varargs
 scm_value_t stdlib_impl_display(scm_value_t value) {
     if (value_is_fixnum(value)) {
         printf("%ld", ((int64_t) value) >> 1);
     } else if (value_is_lambda(value)) {
         printf("#<fn: %p>", value);
+    } else if (value_is_cons(value)) {
+        struct scm_cons *cons = (struct scm_cons *) value;
+
+        printf("(");
+        display_cons_inner(cons);
+        printf(")");
     }
 
     // TODO: return nil
