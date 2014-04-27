@@ -29,8 +29,12 @@ class Scheme < Parslet::Parser
       str(')')
   }
 
+  rule(:comment)    {
+    str(';') >> match('[^\n]').repeat(1).maybe.as(:comment) >> str("\n")
+  }
+
   rule(:atom)      { int | bool | var }
-  rule(:expr)      { atom | list }
+  rule(:expr)      { atom | list | comment }
   rule(:expr_list) { ((space? >> expr).repeat(1).maybe >> space?).as(:exprs) }
 
   root(:expr_list)
@@ -66,6 +70,14 @@ module AST
     def specialize
       self
     end
+  end
+
+  class Comment < Node
+    def initialize(text)
+      @text = text
+    end
+
+    attr :text
   end
 
   class Var < Node
@@ -284,6 +296,7 @@ module AST
 
     rule(list: sequence(:x))  { NestedNode.new(*x) }
 
+    rule(comment: simple(:c)) { Comment.new(c) }
     rule(exprs: sequence(:x)) { Program.new(*x) }
   end
 
@@ -318,6 +331,12 @@ module AST
       end
 
       vm.commit
+    end
+  end
+
+  class Comment < Node
+    def codegen(vm)
+      # do nothing!
     end
   end
 
