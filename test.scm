@@ -31,4 +31,9 @@
                             ; addthreenums
 
 (display (addfournums 1 2 3 4)) (newline)
-(display ((closure 1) 2) )
+(display ((closure 1) 2) ) (newline)
+
+(newline)
+
+;; Just for kicks, displaying a lambda.
+(display closure)

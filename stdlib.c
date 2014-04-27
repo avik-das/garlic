@@ -120,9 +120,10 @@ scm_value_t stdlib_impl_sum(scm_value_t a_val, scm_value_t b_val) {
 
 // TODO: varargs
 scm_value_t stdlib_impl_display(scm_value_t value) {
-    if (((int64_t) value) & 0x1) {
-        // a tagged fixnum
+    if (value_is_fixnum(value)) {
         printf("%ld", ((int64_t) value) >> 1);
+    } else if (value_is_lambda(value)) {
+        printf("#<fn: %p>", value);
     }
 
     // TODO: return nil
