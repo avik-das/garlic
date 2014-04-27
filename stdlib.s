@@ -7,6 +7,7 @@
          .global stdlib_cons
          .global stdlib_car
          .global stdlib_cdr
+         .global stdlib_nullp
 
          .global stdlib_display
          .global stdlib_newline
@@ -56,6 +57,12 @@ stdlib_cdr:
         # ignore the pushed frame
         mov     24(%rsp), %rax
         mov     16(%rax), %rax
+        ret
+
+stdlib_nullp:
+        # ignore the pushed frame
+        mov     24(%rsp), %rdi
+        call    stdlib_impl_nullp
         ret
 
 stdlib_display:

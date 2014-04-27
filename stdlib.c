@@ -4,7 +4,9 @@
 
 #include "hashmap.h"
 
-#define NIL_VALUE 0
+#define NIL_VALUE   0
+#define TRUE_VALUE  2
+#define FALSE_VALUE 4
 
 typedef void * scm_value_t;
 
@@ -13,11 +15,13 @@ scm_value_t stdlib_sum(scm_value_t a_val, scm_value_t b_val);
 scm_value_t stdlib_cons(scm_value_t car_val, scm_value_t cdr_val);
 scm_value_t stdlib_car(scm_value_t cons_val);
 scm_value_t stdlib_cdr(scm_value_t cons_val);
+scm_value_t stdlib_nullp(scm_value_t value);
 
 scm_value_t stdlib_display(scm_value_t value);
 scm_value_t stdlib_newline();
 
 scm_value_t stdlib_impl_sum(scm_value_t a_val, scm_value_t b_val);
+scm_value_t stdlib_impl_nullp(scm_value_t value);
 scm_value_t stdlib_impl_display(scm_value_t value);
 scm_value_t stdlib_impl_newline();
 
@@ -71,6 +75,7 @@ struct frame_t * new_root_frame() {
     add_to_frame(frame, "cons", make_fn(frame, stdlib_cons));
     add_to_frame(frame, "car", make_fn(frame, stdlib_car));
     add_to_frame(frame, "cdr", make_fn(frame, stdlib_cdr));
+    add_to_frame(frame, "null?", make_fn(frame, stdlib_nullp));
 
     add_to_frame(frame, "display", make_fn(frame, stdlib_display));
     add_to_frame(frame, "newline", make_fn(frame, stdlib_newline));
@@ -116,15 +121,15 @@ struct scm_cons {
 };
 
 inline int value_is_nil(scm_value_t value) {
-    return value == 0;
+    return value == NIL_VALUE;
 }
 
 inline int value_is_true(scm_value_t value) {
-    return ((int64_t) value) == 2;
+    return ((int64_t) value) == TRUE_VALUE;
 }
 
 inline int value_is_false(scm_value_t value) {
-    return ((int64_t) value) == 4;
+    return ((int64_t) value) == FALSE_VALUE;
 }
 
 inline int value_is_fixnum(scm_value_t value) {
@@ -228,6 +233,12 @@ scm_value_t stdlib_impl_sum(scm_value_t a_val, scm_value_t b_val) {
     int64_t c = a + b;
 
     return (scm_value_t) (c | 1);
+}
+
+scm_value_t stdlib_impl_nullp(scm_value_t value) {
+    return value == NIL_VALUE ?
+        (scm_value_t) TRUE_VALUE :
+        (scm_value_t) FALSE_VALUE;
 }
 
 void display_cons_inner(struct scm_cons *cons) {

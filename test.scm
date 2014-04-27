@@ -66,6 +66,10 @@
 (display (cons 'a (cons 'b (cons 'c '())))) (newline)
 (display '(a b c)) (newline)
 
+(display (null? '(a b c))) (newline)
+(display (null? '())) (newline)
+(display (null? 0)) (newline)
+
 (newline)
 
 ;; Booleans and onditionals.
@@ -83,4 +87,21 @@
 (display (if (not #f) 'correct 'wrong)) (newline)
 (display (if (not #t) 'wrong 'correct)) (newline)
 (display (if (not 0) 'wrong 'correct)) (newline)
-(display (if (not 1) 'wrong 'correct))
+(display (if (not 1) 'wrong 'correct)) (newline)
+
+(newline)
+
+;; Lists and recursion.
+
+(define length
+        (lambda (ls) (if (null? ls)
+                         0
+                         (+ 1 (length (cdr ls))) )) )
+
+(define map
+        (lambda (f ls) (if (null? ls)
+                           '()
+                           (cons (f (car ls)) (map f (cdr ls))) )) )
+
+(display (length '(a b c d))) (newline)
+(display (map (lambda (x) (+ 1 x)) '(1 2 3 4)))
