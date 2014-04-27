@@ -40,8 +40,26 @@
 
 (newline)
 
+;; Quoted values
+
+(display 'a) (newline)
+(display '123) (newline)
+(display '(1 2 3)) (newline)
+(display '(1 '(2 3) 4)) (newline)
+
+(newline)
+
+;; Nil.
+(display '()) (newline)
+(display (display 'a)) (newline)
+
+(newline)
+
 ;; Cons cells.
 (define threecons (cons 1 (cons 2 3)))
 (display threecons) (newline)
 (display (car threecons)) (newline)
-(display (cdr threecons))
+(display (cdr threecons)) (newline)
+
+(display (cons 'a (cons 'b (cons 'c '())))) (newline)
+(display '(a b c))

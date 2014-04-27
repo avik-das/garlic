@@ -29,12 +29,16 @@ class Scheme < Parslet::Parser
       str(')')
   }
 
+  rule(:quoted)     {
+    str('\'') >> (atom | list).as(:quoted)
+  }
+
   rule(:comment)    {
     str(';') >> match('[^\n]').repeat(1).maybe.as(:comment) >> str("\n")
   }
 
   rule(:atom)      { int | bool | var }
-  rule(:expr)      { atom | list | comment }
+  rule(:expr)      { atom | list | quoted | comment }
   rule(:expr_list) { ((space? >> expr).repeat(1).maybe >> space?).as(:exprs) }
 
   root(:expr_list)
@@ -70,6 +74,10 @@ module AST
     def specialize
       self
     end
+
+    def specialize_quoted
+      self
+    end
   end
 
   class Comment < Node
@@ -80,6 +88,50 @@ module AST
     attr :text
   end
 
+  class Quoted < Node
+    def initialize(value)
+      @value = value
+    end
+
+    def specialize
+      specialize_quoted
+    end
+
+    def specialize_quoted
+      @value.specialize_quoted
+    end
+
+    attr :value
+  end
+
+  class QuotedAtom < Node
+    def initialize(name)
+      @name = name
+    end
+
+    attr :name
+  end
+
+  class QuotedList < Node
+    def initialize(children)
+      @children = children
+    end
+
+    def has_children?
+      true
+    end
+
+    attr :children
+  end
+
+  class Nil < Node
+    include Singleton
+
+    def to_s
+      "'()"
+    end
+  end
+
   class Var < Node
     def initialize(name)
       @name = name
@@ -87,6 +139,10 @@ module AST
 
     def to_s
       @name.to_s
+    end
+
+    def specialize_quoted
+      QuotedAtom.new(@name)
     end
 
     attr :name
@@ -101,6 +157,10 @@ module AST
       @value.to_s
     end
 
+    def specialize_quoted
+      self
+    end
+
     attr :value
   end
 
@@ -110,6 +170,10 @@ module AST
     def to_s
       "#t"
     end
+
+    def specialize_quoted
+      self
+    end
   end
 
   class FalseVal < Node
@@ -117,6 +181,10 @@ module AST
 
     def to_s
       "#f"
+    end
+
+    def specialize_quoted
+      self
     end
   end
 
@@ -149,6 +217,15 @@ module AST
 
         specialized_children = @children.map(&:specialize)
         FunctionCall.new(*specialized_children)
+      end
+    end
+
+    def specialize_quoted
+      if @children.empty?
+        Nil.instance
+      else
+        quoted_children = @children.map(&:specialize_quoted)
+        QuotedList.new(quoted_children)
       end
     end
 
@@ -296,6 +373,8 @@ module AST
 
     rule(list: sequence(:x))  { NestedNode.new(*x) }
 
+    rule(quoted: simple(:q))  { Quoted.new(q) }
+
     rule(comment: simple(:c)) { Comment.new(c) }
     rule(exprs: sequence(:x)) { Program.new(*x) }
   end
@@ -337,6 +416,39 @@ module AST
   class Comment < Node
     def codegen(vm)
       # do nothing!
+    end
+  end
+
+  class QuotedAtom < Node
+    def codegen(vm)
+      name = vm.addquotedatom(@name)
+      vm.asm "        mov     $#{name}_name, %rdi"
+      vm.asm "        call    get_atom"
+    end
+  end
+
+  class QuotedList < Node
+    def codegen(vm)
+      vm.asm "        mov     $0, %rsi"
+
+      @children.reverse.each_with_index do |child, index|
+        vm.push("%rsi")
+        child.codegen(vm)
+        vm.pop("%rsi")
+
+        vm.asm "        mov     %rax, %rdi"
+        vm.asm "        call    make_cons"
+
+        unless index == @children.size - 1
+          vm.asm "        mov     %rax, %rsi"
+        end
+      end
+    end
+  end
+
+  class Nil < Node
+    def codegen(vm)
+      vm.asm "        mov     $0, %rax"
     end
   end
 
@@ -482,6 +594,7 @@ module VM
       @filename = filename
       @statements = []
       @varnames = {}
+      @quotedatoms = {}
       @frame_offsets = [0]
       @currfn = 0
 
@@ -497,6 +610,7 @@ module VM
       asm ""
       asm "        .text"
       asm "main:"
+      asm "        call    create_atoms"
       asm "        call    new_root_frame"
       asm "        push    %rax"
     end
@@ -510,6 +624,23 @@ module VM
 
       @varnames.each do |name, label|
         asm "#{label}:"
+        asm "        .asciz  \"#{name}\""
+      end
+
+      asm ""
+      asm "create_atoms:"
+      asm "        call    init_atom_db"
+
+      @quotedatoms.each do |name, label|
+        asm "        mov     $#{label}_name, %rdi"
+        asm "        call    create_atom"
+      end
+
+      asm "        ret"
+      asm ""
+
+      @quotedatoms.each do |name, label|
+        asm "#{label}_name:"
         asm "        .asciz  \"#{name}\""
       end
     end
@@ -530,6 +661,18 @@ module VM
       else
         label = "var_#{Digest::MD5.hexdigest(name_str)}"
         @varnames[name_str] = label
+        label
+      end
+    end
+
+    def addquotedatom(name)
+      name_str = name.to_s
+
+      if @quotedatoms.has_key?(name_str)
+        @quotedatoms[name_str]
+      else
+        label = "atom_#{Digest::MD5.hexdigest(name_str)}"
+        @quotedatoms[name_str] = label
         label
       end
     end

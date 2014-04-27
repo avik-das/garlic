@@ -4,6 +4,8 @@
 
 #include "hashmap.h"
 
+#define NIL_VALUE 0
+
 typedef void * scm_value_t;
 
 scm_value_t stdlib_sum(scm_value_t a_val, scm_value_t b_val);
@@ -88,6 +90,7 @@ struct frame_t * new_frame_with_parent(struct frame_t *parent) {
 
 enum scm_value_type {
     SCM_TYPE_LAMBDA = 0,
+    SCM_TYPE_ATOM,
     SCM_TYPE_CONS
 };
 
@@ -101,26 +104,48 @@ struct scm_lambda {
     void *function;
 };
 
+struct scm_atom {
+    struct scm_value super;
+    char* name;
+};
+
 struct scm_cons {
     struct scm_value super;
     scm_value_t car;
     scm_value_t cdr;
 };
 
+inline int value_is_nil(scm_value_t value) {
+    return value == 0;
+}
+
 inline int value_is_fixnum(scm_value_t value) {
     return ((int64_t) value) & 0x1;
 }
 
+inline int value_is_primitive(scm_value_t value) {
+    return value_is_nil(value) ||
+        value_is_fixnum(value);
+}
+
 inline int value_is_lambda(scm_value_t value) {
-    if (value_is_fixnum(value)) {
+    if (value_is_primitive(value)) {
         return 0;
     }
 
     return ((struct scm_value *) value)->type == SCM_TYPE_LAMBDA;
 }
 
+inline int value_is_atom(scm_value_t value) {
+    if (value_is_primitive(value)) {
+        return 0;
+    }
+
+    return ((struct scm_value *) value)->type == SCM_TYPE_ATOM;
+}
+
 inline int value_is_cons(scm_value_t value) {
-    if (value_is_fixnum(value)) {
+    if (value_is_primitive(value)) {
         return 0;
     }
 
@@ -141,6 +166,16 @@ scm_value_t make_fn(struct frame_t *parent_frame, void *fnpointer) {
     return fn;
 }
 
+scm_value_t make_atom_from_name(char *name) {
+    struct scm_atom *atom = (struct scm_atom *)
+        malloc(sizeof(struct scm_atom));
+
+    atom->super.type = SCM_TYPE_ATOM;
+    atom->name = name;
+
+    return atom;
+}
+
 scm_value_t make_cons(scm_value_t car_val, scm_value_t cdr_val) {
     struct scm_cons *cons = (struct scm_cons *)
         malloc(sizeof(struct scm_cons));
@@ -152,6 +187,26 @@ scm_value_t make_cons(scm_value_t car_val, scm_value_t cdr_val) {
     //printf("returning cons %p (%p . %p)\n", cons, car_val, cdr_val);
 
     return cons;
+}
+
+/** QUOTED ATOMS **************************************************************/
+
+map_t atom_db;
+
+void init_atom_db() {
+    atom_db = hashmap_new();
+}
+
+void create_atom(char *name) {
+    scm_value_t atom = make_atom_from_name(name);
+    hashmap_put(atom_db, name, atom);
+}
+
+scm_value_t get_atom(char *name) {
+    scm_value_t value_ptr = (scm_value_t) malloc(sizeof(int64_t));
+    int get_result = hashmap_get(atom_db, name, &value_ptr);
+
+    return value_ptr;
 }
 
 /** STANDARD FUNCTIONS ********************************************************/
@@ -168,7 +223,9 @@ scm_value_t stdlib_impl_sum(scm_value_t a_val, scm_value_t b_val) {
 void display_cons_inner(struct scm_cons *cons) {
     stdlib_impl_display(cons->car);
 
-    if (value_is_cons(cons->cdr)) {
+    if (value_is_nil(cons->cdr)) {
+        // Do nothing
+    } else if (value_is_cons(cons->cdr)) {
         printf(" ");
         display_cons_inner((struct scm_cons *) cons->cdr);
     } else {
@@ -179,10 +236,14 @@ void display_cons_inner(struct scm_cons *cons) {
 
 // TODO: varargs
 scm_value_t stdlib_impl_display(scm_value_t value) {
-    if (value_is_fixnum(value)) {
+    if (value_is_nil(value)) {
+        printf("()");
+    } else if (value_is_fixnum(value)) {
         printf("%ld", ((int64_t) value) >> 1);
     } else if (value_is_lambda(value)) {
         printf("#<fn: %p>", value);
+    } else if (value_is_atom(value)) {
+        printf("%s", ((struct scm_atom *) value)->name);
     } else if (value_is_cons(value)) {
         struct scm_cons *cons = (struct scm_cons *) value;
 
@@ -191,11 +252,10 @@ scm_value_t stdlib_impl_display(scm_value_t value) {
         printf(")");
     }
 
-    // TODO: return nil
-    return NULL;
+    return NIL_VALUE;
 }
 
 scm_value_t stdlib_impl_newline() {
     printf("\n");
-    return NULL; // TODO: return nil
+    return NIL_VALUE;
 }
