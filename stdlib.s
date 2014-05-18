@@ -1,20 +1,26 @@
-         .global scm_fncall
+#if defined(__WIN32__) || defined(__APPLE__)
+# define cdecl(s) _##s
+#else
+# define cdecl(s) s
+#endif
+
+         .global cdecl(scm_fncall)
 
 # stdlib functions
 
-         .global stdlib_sum
+         .global cdecl(stdlib_sum)
 
-         .global stdlib_cons
-         .global stdlib_car
-         .global stdlib_cdr
-         .global stdlib_nullp
+         .global cdecl(stdlib_cons)
+         .global cdecl(stdlib_car)
+         .global cdecl(stdlib_cdr)
+         .global cdecl(stdlib_nullp)
 
-         .global stdlib_display
-         .global stdlib_newline
+         .global cdecl(stdlib_display)
+         .global cdecl(stdlib_newline)
 
          .text
 
-scm_fncall:
+cdecl(scm_fncall):
         # This function is called with the wrapped lambda as the only argument.
         # A new frame is created using the lambda's parent frame as the parent,
         # and the function pointer is retrieved and called.
@@ -24,7 +30,7 @@ scm_fncall:
         # It is the callee's responsiblity to handle the arguments.
         push    %rdi                    # save the lambda on the stack
         mov     8(%rdi), %rdi           # create a new frame using the lambda's
-        call    new_frame_with_parent   #   stored frame as the parent
+        call    cdecl(new_frame_with_parent) # stored frame as the parent
         mov     %rax, %rdi
         pop     %rax                    # grab the lambda again
         push    %rdi                    # save the new frame
@@ -33,45 +39,45 @@ scm_fncall:
         add     $8, %rsp                # remove the new frame from the stack
         ret
 
-stdlib_sum:
+cdecl(stdlib_sum):
         # ignore the pushed frame
         mov     24(%rsp), %rdi
         mov     32(%rsp), %rsi
-        call    stdlib_impl_sum
+        call    cdecl(stdlib_impl_sum)
         ret
 
-stdlib_cons:
+cdecl(stdlib_cons):
         # ignore the pushed frame
         mov     24(%rsp), %rdi
         mov     32(%rsp), %rsi
-        call    make_cons
+        call    cdecl(make_cons)
         ret
 
-stdlib_car:
+cdecl(stdlib_car):
         # ignore the pushed frame
         mov     24(%rsp), %rax
         mov     8(%rax), %rax
         ret
 
-stdlib_cdr:
+cdecl(stdlib_cdr):
         # ignore the pushed frame
         mov     24(%rsp), %rax
         mov     16(%rax), %rax
         ret
 
-stdlib_nullp:
+cdecl(stdlib_nullp):
         # ignore the pushed frame
         mov     24(%rsp), %rdi
-        call    stdlib_impl_nullp
+        call    cdecl(stdlib_impl_nullp)
         ret
 
-stdlib_display:
+cdecl(stdlib_display):
         # ignore the pushed frame
         mov     24(%rsp), %rdi
-        call    stdlib_impl_display
+        call    cdecl(stdlib_impl_display)
         ret
 
-stdlib_newline:
+cdecl(stdlib_newline):
         # ignore the pushed frame
-        call    stdlib_impl_newline
+        call    cdecl(stdlib_impl_newline)
         ret

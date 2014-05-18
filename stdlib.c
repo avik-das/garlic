@@ -120,30 +120,30 @@ struct scm_cons {
     scm_value_t cdr;
 };
 
-inline int value_is_nil(scm_value_t value) {
+static inline int value_is_nil(scm_value_t value) {
     return value == NIL_VALUE;
 }
 
-inline int value_is_true(scm_value_t value) {
+static inline int value_is_true(scm_value_t value) {
     return ((int64_t) value) == TRUE_VALUE;
 }
 
-inline int value_is_false(scm_value_t value) {
+static inline int value_is_false(scm_value_t value) {
     return ((int64_t) value) == FALSE_VALUE;
 }
 
-inline int value_is_fixnum(scm_value_t value) {
+static inline int value_is_fixnum(scm_value_t value) {
     return ((int64_t) value) & 0x1;
 }
 
-inline int value_is_primitive(scm_value_t value) {
+static inline int value_is_primitive(scm_value_t value) {
     return value_is_nil(value) ||
         value_is_fixnum(value) ||
         value_is_true(value) ||
         value_is_false(value);
 }
 
-inline int value_is_lambda(scm_value_t value) {
+static inline int value_is_lambda(scm_value_t value) {
     if (value_is_primitive(value)) {
         return 0;
     }
@@ -151,7 +151,7 @@ inline int value_is_lambda(scm_value_t value) {
     return ((struct scm_value *) value)->type == SCM_TYPE_LAMBDA;
 }
 
-inline int value_is_atom(scm_value_t value) {
+static inline int value_is_atom(scm_value_t value) {
     if (value_is_primitive(value)) {
         return 0;
     }
@@ -159,7 +159,7 @@ inline int value_is_atom(scm_value_t value) {
     return ((struct scm_value *) value)->type == SCM_TYPE_ATOM;
 }
 
-inline int value_is_cons(scm_value_t value) {
+static inline int value_is_cons(scm_value_t value) {
     if (value_is_primitive(value)) {
         return 0;
     }
@@ -264,7 +264,7 @@ scm_value_t stdlib_impl_display(scm_value_t value) {
     } else if (value_is_false(value)) {
         printf("#f");
     } else if (value_is_fixnum(value)) {
-        printf("%ld", ((int64_t) value) >> 1);
+        printf("%" PRId64, ((int64_t) value) >> 1);
     } else if (value_is_lambda(value)) {
         printf("#<fn: %p>", value);
     } else if (value_is_atom(value)) {

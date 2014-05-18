@@ -438,8 +438,8 @@ module AST
   class QuotedAtom < Node
     def codegen(vm)
       name = vm.addquotedatom(@name)
-      vm.asm "        mov     $#{name}_name, %rdi"
-      vm.asm "        call    get_atom"
+      vm.movdata "#{name}_name", "%rdi"
+      vm.call "get_atom"
     end
   end
 
@@ -453,7 +453,7 @@ module AST
         vm.pop("%rsi")
 
         vm.asm "        mov     %rax, %rdi"
-        vm.asm "        call    make_cons"
+        vm.call "make_cons"
 
         unless index == @children.size - 1
           vm.asm "        mov     %rax, %rsi"
@@ -473,8 +473,8 @@ module AST
       varname = vm.addvarname(self)
 
       vm.argframe
-      vm.asm "        mov     $#{varname}, %rsi"
-      vm.asm "        call    find_in_frame"
+      vm.movdata varname, "%rsi"
+      vm.call "find_in_frame"
     end
   end
 
@@ -482,7 +482,7 @@ module AST
     def codegen(vm)
       # TODO: large numbers
       val = (@value << 1) | 0x1
-      vm.asm "        mov     $#{val}, %rax"
+      vm.asm "        mov     #{val}, %rax"
     end
   end
 
@@ -504,9 +504,9 @@ module AST
       @value.codegen(vm)
       # now the value is in %rax
       vm.argframe
-      vm.asm "        mov     $#{varname}, %rsi"
+      vm.movdata varname, "%rsi"
       vm.asm "        mov     %rax, %rdx"
-      vm.asm "        call    add_to_frame"
+      vm.call "add_to_frame"
     end
   end
 
@@ -551,9 +551,9 @@ module AST
         offset = 24 + (i * 8)
 
         vm.argframe
-        vm.asm "        mov     $#{varname}, %rsi"
+        vm.movdata varname, "%rsi"
         vm.asm "        mov     #{offset}(%rsp), %rdx"
-        vm.asm "        call    add_to_frame"
+        vm.call "add_to_frame"
       end
 
       body.codegen(vm)
@@ -566,8 +566,8 @@ module AST
       # generate the actual lambda
 
       vm.argframe
-      vm.asm "        mov     $#{name}, %rsi"
-      vm.asm "        call    make_fn"
+      vm.movdata name, "%rsi"
+      vm.call "make_fn"
     end
   end
 
@@ -591,7 +591,7 @@ module AST
       # TODO: align stack pointer
 
       vm.asm "        mov     %rax, %rdi"
-      vm.asm "        call    scm_fncall"
+      vm.call "scm_fncall"
 
       vm.popn(@args.size)
     end
@@ -637,12 +637,30 @@ module VM
       asm "# compiled.s"
       asm("# " + ("-" * 77))
       asm ""
-      asm "        .global main"
+
+      asm "# MACROS: needed for cross-platform compatibility"
+
+      asm "#if defined(__WIN32__) || defined(__APPLE__)"
+      asm "# define cdecl(s) _##s"
+      asm "#else"
+      asm "# define cdecl(s) s"
+      asm "#endif"
+
+      asm ""
+
+      asm "#if defined(__APPLE__)"
+      asm "# define movdata(src, dst) movq    src##\@GOTPCREL(%rip), dst"
+      asm "#else"
+      asm "# define movdata(src, dst) mov     $##src##, dst"
+      asm "#endif"
+
+      asm ""
+      asm "        .global cdecl(main)"
       asm ""
       asm "        .text"
-      asm "main:"
+      asm "cdecl(main):"
       asm "        call    create_atoms"
-      asm "        call    new_root_frame"
+      call "new_root_frame"
       asm "        push    %rax"
     end
 
@@ -653,18 +671,21 @@ module VM
       asm "        ret"
       asm ""
 
+      asm "create_atoms:"
+      call "init_atom_db"
+      asm ""
+
+      asm "        .data"
+      asm ""
+
       @varnames.each do |name, label|
         asm "#{label}:"
         asm "        .asciz  \"#{name}\""
       end
 
-      asm ""
-      asm "create_atoms:"
-      asm "        call    init_atom_db"
-
       @quotedatoms.each do |name, label|
-        asm "        mov     $#{label}_name, %rdi"
-        asm "        call    create_atom"
+        movdata "#{label}_name", "%rdi"
+        call "create_atom"
       end
 
       asm "        ret"
@@ -762,6 +783,14 @@ module VM
 
     def fnend
       @frame_offsets.pop
+    end
+
+    def call(fnname)
+      asm "        call    cdecl(#{fnname})"
+    end
+
+    def movdata(src, dst)
+      asm "        movdata(#{src}, #{dst})"
     end
 
     def asm(statement)
