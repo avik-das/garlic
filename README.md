@@ -12,6 +12,6 @@ Quick Start
 git clone https://github.com/avik-das/scheme-compiler.git
 cd scheme-compiler
 ./s-expr.rb test.scm
-gcc -g compiled.s stdlib.c stdlib.s hashmap.c # later, this will be automated
+gcc -g compiled.S stdlib.c stdlib.S hashmap.c # later, this will be automated
 ./a.out
 ```

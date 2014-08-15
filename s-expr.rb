@@ -646,7 +646,7 @@ module VM
 
     def prologue
       asm("# " + ("-" * 77))
-      asm "# compiled.s"
+      asm "# compiled.S"
       asm("# " + ("-" * 77))
       asm ""
 
@@ -909,7 +909,7 @@ parsed = Scheme.new.parse(inp)
 ast = AST.construct_from_parse_tree(parsed)
 require 'pp'
 #pp ast
-ast.codegen("compiled.s")
+ast.codegen("compiled.S")
 exit
 
 # vim: ts=2 sw=2 :
