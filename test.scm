@@ -52,7 +52,8 @@
   (cons a (cons b (cons c (cons d '())))) )
 
 (display (f 2)) (newline)
-(display (g 'this 'is 'a 'list))
+(display '(this is a list)) (newline)
+(display (g 'this 'is 'a 'list)) (newline)
 
 (newline)
 

@@ -60,7 +60,7 @@ module AST
     end
 
     def to_s
-      @statements.join("\n\n")
+      @statements.join("\n")
     end
 
     attr :statements
@@ -83,6 +83,10 @@ module AST
   class Comment < Node
     def initialize(text)
       @text = text
+    end
+
+    def to_s
+      "\033[32m;#{text}\033[0m"
     end
 
     attr :text
@@ -109,6 +113,10 @@ module AST
       @name = name
     end
 
+    def to_s
+      "\033[1;32m'#{name}\033[0m"
+    end
+
     attr :name
   end
 
@@ -119,6 +127,15 @@ module AST
 
     def has_children?
       true
+    end
+
+    def to_s
+      children_str = @children.map(&:to_s).join(" ")
+      if not children_str.empty?
+        children_str = " #{children_str}"
+      end
+
+      "(\033[1;34mlist\033[0m#{children_str})"
     end
 
     attr :children
@@ -346,7 +363,12 @@ module AST
 
     def to_s
       args_str = @args.map(&:to_s).join(" ")
-      "(\033[#{self.internal_color}m#{@func}\033[0m #{args_str})"
+
+      if not args_str.empty?
+        args_str = " #{args_str}"
+      end
+
+      "(\033[#{self.internal_color}m#{@func}\033[0m#{args_str})"
     end
 
     def internal_color
@@ -371,7 +393,7 @@ module AST
 
     def to_s
       "(\033[#{self.internal_color}mif\033[0m " +
-        "#{@cond} #{@true_expr} #{@false_expr}"
+        "#{@cond} #{@true_expr} #{@false_expr})"
     end
 
     def internal_color
@@ -907,7 +929,7 @@ end
 inp = File.read(ARGV[0])
 parsed = Scheme.new.parse(inp)
 ast = AST.construct_from_parse_tree(parsed)
-require 'pp'
+#require 'pp'
 #pp ast
 ast.codegen("compiled.S")
 exit
