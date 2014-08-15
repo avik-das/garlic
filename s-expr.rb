@@ -3,7 +3,6 @@
 require 'parslet'
 require 'singleton'
 require 'digest/md5'
-require 'securerandom'
 
 ## INITIAL PARSER ##############################################################
 
@@ -426,19 +425,6 @@ end
 ## NATIVE CODE GENERATION ######################################################
 
 module AST
-  # The registers used for passing arguments to function calls, in the order of
-  # priority. That is, the first argument of a function goes into %rdi, then
-  # the second argument goes into %rsi, etc. The rest are passed on the stack,
-  # from right to left.
-  ARG_REGISTERS = [
-    "%rdi",
-    "%rsi",
-    "%rdx",
-    "%rcx",
-    "%r8",
-    "%r9"
-  ]
-
   class Program
     def codegen(filename)
       vm = VM::VM.new(filename)
@@ -891,33 +877,6 @@ module VM
     def asm(statement)
       @statements << statement
     end
-
-    #def newframe(parent = nil)
-    #  # push parent to stack
-    #  # call newframe function
-    #  # push address of new frame onto stack
-    #end
-
-    #def lookupvar(frame, var)
-    #  # push frame to stack
-    #  # push var.name to stack
-    #  # call lookup function
-    #end
-
-    #def addvar(var)
-    #  # push frame to stack
-    #  # push var.name to stack
-    #  # push value to stack
-    #  # call addvar function
-    #end
-
-    #def fncall(fn, *args)
-    #  # check arity vs. args
-    #  # create new frame with fn's parent frame as parent
-    #  # add args to frame
-    #  # push frame to stack
-    #  # jmp to fn's address
-    #end
   end
 end
 
