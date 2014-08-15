@@ -439,7 +439,9 @@ module AST
     def codegen(vm)
       name = vm.addquotedatom(@name)
       vm.movdata "#{name}_name", "%rdi"
-      vm.call "get_atom"
+      vm.with_aligned_stack do
+        vm.call "get_atom"
+      end
     end
   end
 
@@ -453,7 +455,9 @@ module AST
         vm.pop("%rsi")
 
         vm.asm "        mov     %rax, %rdi"
-        vm.call "make_cons"
+        vm.with_aligned_stack do
+          vm.call "make_cons"
+        end
 
         unless index == @children.size - 1
           vm.asm "        mov     %rax, %rsi"
@@ -474,7 +478,9 @@ module AST
 
       vm.argframe
       vm.movdata varname, "%rsi"
-      vm.call "find_in_frame"
+      vm.with_aligned_stack do
+        vm.call "find_in_frame"
+      end
     end
   end
 
@@ -482,7 +488,7 @@ module AST
     def codegen(vm)
       # TODO: large numbers
       val = (@value << 1) | 0x1
-      vm.asm "        mov     #{val}, %rax"
+      vm.asm "        mov     $#{val}, %rax"
     end
   end
 
@@ -506,7 +512,9 @@ module AST
       vm.argframe
       vm.movdata varname, "%rsi"
       vm.asm "        mov     %rax, %rdx"
-      vm.call "add_to_frame"
+      vm.with_aligned_stack do
+        vm.call "add_to_frame"
+      end
     end
   end
 
@@ -548,12 +556,14 @@ module AST
 
       params.each_with_index do |param, i|
         varname = vm.addvarname(param)
-        offset = 24 + (i * 8)
+        offset = 32 + (i * 8)
 
         vm.argframe
         vm.movdata varname, "%rsi"
         vm.asm "        mov     #{offset}(%rsp), %rdx"
-        vm.call "add_to_frame"
+        vm.with_aligned_stack do
+          vm.call "add_to_frame"
+        end
       end
 
       body.codegen(vm)
@@ -567,7 +577,9 @@ module AST
 
       vm.argframe
       vm.movdata name, "%rsi"
-      vm.call "make_fn"
+      vm.with_aligned_stack do
+        vm.call "make_fn"
+      end
     end
   end
 
@@ -580,20 +592,20 @@ module AST
       # fit in the registers can be popped off one by one before calling the
       # function.
 
-      @args.reverse.each do |arg|
-        arg.codegen(vm)
-        vm.push("%rax")
+      vm.with_aligned_stack(@args.size) do
+        @args.reverse.each do |arg|
+          arg.codegen(vm)
+          vm.push("%rax")
+        end
+
+        # Evaluate the expression in order to get the wrapped function pointer.
+        @func.codegen(vm)
+
+        vm.asm "        mov     %rax, %rdi"
+        vm.call "scm_fncall"
+
+        vm.popn(@args.size)
       end
-
-      # Evaluate the expression in order to get the wrapped function pointer.
-      @func.codegen(vm)
-
-      # TODO: align stack pointer
-
-      vm.asm "        mov     %rax, %rdi"
-      vm.call "scm_fncall"
-
-      vm.popn(@args.size)
     end
   end
 
@@ -625,7 +637,7 @@ module VM
       @statements = []
       @varnames = {}
       @quotedatoms = {}
-      @frame_offsets = [0]
+      @frame_offsets = [8]
       @currfn = 0
       @currcond = 0
 
@@ -659,6 +671,7 @@ module VM
       asm ""
       asm "        .text"
       asm "cdecl(main):"
+      asm "        sub     $8, %rsp"
       asm "        call    create_atoms"
       call "new_root_frame"
       asm "        push    %rax"
@@ -666,13 +679,24 @@ module VM
 
     def epilogue
       asm ""
-      asm "        pop     %rax"
+      asm "        add     $16, %rsp"
       asm "        mov     $0, %rax"
       asm "        ret"
       asm ""
 
       asm "create_atoms:"
+      asm "        sub     $8, %rsp"
       call "init_atom_db"
+
+      asm ""
+      @quotedatoms.each do |name, label|
+        movdata "#{label}_name", "%rdi"
+        call "create_atom"
+      end
+      asm ""
+
+      asm "        add     $8, %rsp"
+      asm "        ret"
       asm ""
 
       asm "        .data"
@@ -681,11 +705,6 @@ module VM
       @varnames.each do |name, label|
         asm "#{label}:"
         asm "        .asciz  \"#{name}\""
-      end
-
-      @quotedatoms.each do |name, label|
-        movdata "#{label}_name", "%rdi"
-        call "create_atom"
       end
 
       asm "        ret"
@@ -771,18 +790,39 @@ module VM
     end
 
     def argframe
-      offset = @frame_offsets.last
-      asm "        add     $#{offset}, %rsp" if offset > 0
-      asm "        mov     (%rsp), %rdi"
-      asm "        sub     $#{offset}, %rsp" if offset > 0
+      offset = lstoffset
+      if offset > 0
+        asm "        mov     #{offset}(%rsp), %rdi"
+      else
+        asm "        mov     (%rsp), %rdi"
+      end
     end
 
     def fnstart
+      # The current frame is there on the stack, right before the return
+      # address, but it's useful to have it available right at the top of the
+      # current frame offset so that vm.argframe can continue to work.
+
+      # This is definitely not the most efficient way to handle this, since
+      # this duplicates the frame pointer right before and after the return
+      # address. One option might be to separate the stack frame offset from
+      # the environment frame offset so vm.argframe can continue to work
+      # independently of the stack alignment.
+      asm "        mov     8(%rsp), %rax"
+      push("%rax")
+
       @frame_offsets.push(8)
     end
 
     def fnend
       @frame_offsets.pop
+
+      # Remove the duplicated current frame pointer.
+      pop
+    end
+
+    def lstoffset
+      @frame_offsets.last - 8
     end
 
     def call(fnname)
@@ -791,6 +831,39 @@ module VM
 
     def movdata(src, dst)
       asm "        movdata(#{src}, #{dst})"
+    end
+
+    def with_aligned_stack(num_args_to_push = 0)
+      # When a function call is made, the stack needs to be aligned to a 16-
+      # byte boundary. There's a catch, in that the call needs to be made with
+      # the stack alignment offset by 8 bytes, because the return address will
+      # be pushed to the top of the stack. The stack has to be aligned *after*
+      # the return address is pushed!
+
+      # Another issue, when calling a "user-defined" function, is that we want
+      # the arguments to be as close to the top of the stack as possible, so
+      # that the scm_fncall function (and other functions it calls into) know
+      # where its arguments are, regardless of how the stack had to be aligned.
+      # So, we'll align the stack *before* pushing the arguments. Whether or
+      # not we need to align depends on the current stack alignment and the
+      # number arguments we'll be pushing.
+      is_stack_aligned = (lstoffset / 8) % 2 == 1
+      has_even_num_args = num_args_to_push % 2 == 0
+
+      should_not_align_stack = is_stack_aligned and has_even_num_args
+      should_align_stack = !should_not_align_stack
+
+      if should_align_stack
+        asm("# aligning stack")
+        push
+      end
+
+      yield
+
+      if should_align_stack
+        pop
+        asm("# unaligning stack")
+      end
     end
 
     def asm(statement)
