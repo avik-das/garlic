@@ -9,6 +9,7 @@
 # stdlib functions
 
          .global cdecl(stdlib_sum)
+         .global cdecl(stdlib_mul)
 
          .global cdecl(stdlib_cons)
          .global cdecl(stdlib_car)
@@ -44,6 +45,13 @@ cdecl(stdlib_sum):
         mov     24(%rsp), %rdi
         mov     32(%rsp), %rsi
         call    cdecl(stdlib_impl_sum)
+        ret
+
+cdecl(stdlib_mul):
+        # ignore the pushed frame
+        mov     24(%rsp), %rdi
+        mov     32(%rsp), %rsi
+        call    cdecl(stdlib_impl_mul)
         ret
 
 cdecl(stdlib_cons):

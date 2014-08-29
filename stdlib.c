@@ -11,6 +11,7 @@
 typedef void * scm_value_t;
 
 scm_value_t stdlib_sum(scm_value_t a_val, scm_value_t b_val);
+scm_value_t stdlib_mul(scm_value_t a_val, scm_value_t b_val);
 
 scm_value_t stdlib_cons(scm_value_t car_val, scm_value_t cdr_val);
 scm_value_t stdlib_car(scm_value_t cons_val);
@@ -21,6 +22,7 @@ scm_value_t stdlib_display(scm_value_t value);
 scm_value_t stdlib_newline();
 
 scm_value_t stdlib_impl_sum(scm_value_t a_val, scm_value_t b_val);
+scm_value_t stdlib_impl_mul(scm_value_t a_val, scm_value_t b_val);
 scm_value_t stdlib_impl_nullp(scm_value_t value);
 scm_value_t stdlib_impl_display(scm_value_t value);
 scm_value_t stdlib_impl_newline();
@@ -71,6 +73,7 @@ struct frame_t * new_root_frame() {
     struct frame_t *frame = new_frame();
 
     add_to_frame(frame, "+", make_fn(frame, stdlib_sum));
+    add_to_frame(frame, "*", make_fn(frame, stdlib_mul));
 
     add_to_frame(frame, "cons", make_fn(frame, stdlib_cons));
     add_to_frame(frame, "car", make_fn(frame, stdlib_car));
@@ -233,6 +236,15 @@ scm_value_t stdlib_impl_sum(scm_value_t a_val, scm_value_t b_val) {
     int64_t c = a + b;
 
     return (scm_value_t) (c | 1);
+}
+
+scm_value_t stdlib_impl_mul(scm_value_t a_val, scm_value_t b_val) {
+    //printf("multiplying %ld + %ld\n", (int64_t) a_val, (int64_t) b_val);
+    int64_t a = ((int64_t) a_val) >> 1;
+    int64_t b = ((int64_t) b_val) >> 1;
+    int64_t c = a * b;
+
+    return (scm_value_t) ((c << 1) | 1);
 }
 
 scm_value_t stdlib_impl_nullp(scm_value_t value) {
