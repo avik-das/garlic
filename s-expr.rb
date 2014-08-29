@@ -3,6 +3,7 @@
 require 'parslet'
 require 'singleton'
 require 'digest/md5'
+require 'fileutils'
 
 ## INITIAL PARSER ##############################################################
 
@@ -880,17 +881,41 @@ module VM
   end
 end
 
+## FILE PROCESSING #############################################################
+
+BUILD_DIR = 'build'
+OUT_EXE = 'main'
+
+def create_fresh_build_env(out_exe_name, build_dir_name)
+  if File.file?(out_exe_name)
+    FileUtils.rm(out_exe_name)
+  end
+
+  if File.directory?(build_dir_name)
+    FileUtils.rm_r(build_dir_name)
+  end
+
+  FileUtils.mkdir_p(build_dir_name)
+end
+
+def compile_file(filename, symbol_prefix)
+  file = File.read(filename)
+  parsed = Scheme.new.parse(file)
+  ast = AST.construct_from_parse_tree(parsed)
+
+  ast.codegen("#{BUILD_DIR}/#{filename}.S")
+end
+
+def run_gcc(out_filename)
+  system "gcc -g build/*.scm.S stdlib.c stdlib.S hashmap.c -o #{out_filename}"
+end
+
 ## MAIN ########################################################################
 
 # TODO: check arguments (possibly read from stdin)
-# TODO: allow outputting to a different intermediate .s file
 
-inp = File.read(ARGV[0])
-parsed = Scheme.new.parse(inp)
-ast = AST.construct_from_parse_tree(parsed)
-#require 'pp'
-#pp ast
-ast.codegen("compiled.S")
-exit
+create_fresh_build_env(OUT_EXE, BUILD_DIR)
+compile_file(ARGV[0], 'main')
+run_gcc(OUT_EXE)
 
 # vim: ts=2 sw=2 :
