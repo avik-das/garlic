@@ -33,12 +33,21 @@ class Scheme < Parslet::Parser
     str('\'') >> (atom | list).as(:quoted)
   }
 
+  rule(:string)     {
+    str('"') >>
+      (
+        (str('\\') >> any) |
+        (str('"').absent? >> any)
+      ).repeat(1).maybe.as(:string) >>
+      str('"')
+  }
+
   rule(:comment)    {
     str(';') >> match('[^\n]').repeat(1).maybe.as(:comment) >> str("\n")
   }
 
   rule(:atom)      { int | bool | var }
-  rule(:expr)      { atom | list | quoted | comment }
+  rule(:expr)      { atom | list | quoted | string | comment }
   rule(:expr_list) { ((space? >> expr).repeat(1).maybe >> space?).as(:exprs) }
 
   root(:expr_list)
@@ -54,8 +63,21 @@ module AST
       @statements = statements
     end
 
+    def static_check_and_transform!
+      specialize
+      hoist_definitions!
+    end
+
     def specialize
       @statements = @statements.map(&:specialize)
+      self
+    end
+
+    def hoist_definitions!
+      defines = @statements.find_all { |s| s.is_a?(Definition) }
+      others  = @statements.reject   { |s| s.is_a?(Definition) }
+
+      @statements = defines + others
       self
     end
 
@@ -69,6 +91,10 @@ module AST
   class Node
     def has_children?
       false
+    end
+
+    def static_check_and_transform!
+      self
     end
 
     def specialize
@@ -106,6 +132,14 @@ module AST
     end
 
     attr :value
+  end
+
+  class String < Node
+    def initialize(contents)
+      @contents = contents
+    end
+
+    attr :contents
   end
 
   class QuotedAtom < Node
@@ -275,16 +309,24 @@ module AST
 
   class Definition < SpecializedNode
     def initialize(*children)
-      unless children.size == 3
-        raise ParseException.new(
-          "Definition must have 3 children, got #{children.size}: " +
-            "(#{children.join(" ")})")
-      end
-
       if children[1].is_a?(Var)
+        unless children.size == 3
+          raise ParseException.new(
+            "Variable definition must have 3 children, " +
+              "got #{children.size}: " +
+              "(#{children.join(" ")})")
+        end
+
         @name = children[1]
         @value = children[2].specialize
       elsif children[1].is_a?(NestedNode)
+        unless children.size >= 3
+          raise ParseException.new(
+            "Variable definition must have at least 3 children, " +
+              "got #{children.size}: " +
+              "(#{children.join(" ")})")
+        end
+
         signature = children[1].children
 
         if signature.empty?
@@ -296,7 +338,7 @@ module AST
         @value = Lambda.new(
           :lambda,
           NestedNode.new(*signature[1, signature.size - 1]),
-          children[2]
+          *children[2, children.length - 1]
         )
       else
         raise ParseException.new(
@@ -319,9 +361,9 @@ module AST
 
   class Lambda < SpecializedNode
     def initialize(*children)
-      unless children.size == 3
+      unless children.size >= 3
         raise ParseException.new(
-          "Lambda must have 3 children, got #{children.size}: " +
+          "Lambda must have at least 3 children, got #{children.size}: " +
             "(#{children.join(" ")})")
       end
 
@@ -340,7 +382,7 @@ module AST
       end
 
       @params = children[1].children
-      @body = children[2].specialize
+      @body_statements = children[2, children.length - 1].map(&:specialize)
     end
 
     def to_s
@@ -352,7 +394,7 @@ module AST
       "1;33"
     end
 
-    attr :params, :body
+    attr :params, :body_statements
   end
 
   class FunctionCall < SpecializedNode
@@ -412,6 +454,7 @@ module AST
     rule(list: sequence(:x))  { NestedNode.new(*x) }
 
     rule(quoted: simple(:q))  { Quoted.new(q) }
+    rule(string: simple(:s))  { String.new(s) }
 
     rule(comment: simple(:c)) { Comment.new(c) }
     rule(exprs: sequence(:x)) { Program.new(*x) }
@@ -419,7 +462,7 @@ module AST
 
   def AST.construct_from_parse_tree(tree)
     ast = ASTTransform.new.apply(tree)
-    ast.specialize
+    ast.static_check_and_transform!
   end
 end
 
@@ -471,6 +514,17 @@ module AST
         unless index == @children.size - 1
           vm.asm "        mov     %rax, %rsi"
         end
+      end
+    end
+  end
+
+  class String < Node
+    def codegen(vm)
+      name = vm.addstring(@contents)
+      vm.movdata "#{name}_contents", "%rdi"
+
+      vm.with_aligned_stack do
+        vm.call "make_string_with_contents"
       end
     end
   end
@@ -575,7 +629,9 @@ module AST
         end
       end
 
-      body.codegen(vm)
+      body_statements.each do |statement|
+        statement.codegen(vm)
+      end
 
       vm.fnend
 
@@ -646,6 +702,7 @@ module VM
       @statements = []
       @varnames = {}
       @quotedatoms = {}
+      @stringnames = {}
       @frame_offsets = [8]
       @currfn = 0
       @currcond = 0
@@ -723,6 +780,12 @@ module VM
         asm "#{label}_name:"
         asm "        .asciz  \"#{name}\""
       end
+      asm ""
+
+      @stringnames.each do |contents, label|
+        asm "#{label}_contents:"
+        asm "        .asciz  \"#{contents}\""
+      end
     end
 
     def commit
@@ -753,6 +816,18 @@ module VM
       else
         label = "atom_#{Digest::MD5.hexdigest(name_str)}"
         @quotedatoms[name_str] = label
+        label
+      end
+    end
+
+    def addstring(contents)
+      contents_str = contents.to_s
+
+      if @stringnames.has_key?(contents_str)
+        @stringnames[contents_str]
+      else
+        label = "string_#{Digest::MD5.hexdigest(contents_str)}"
+        @stringnames[contents_str] = label
         label
       end
     end

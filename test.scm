@@ -110,6 +110,11 @@
 
 ;; Lists and recursion.
 
+; Note that the definitions of length and map come *after* their usage, but
+; that's fine because the functions are defined in the same scope.
+(display (length '(a b c d))) (newline)
+(display (map (lambda (x) (+ 1 x)) '(1 2 3 4))) (newline)
+
 (define length
         (lambda (ls) (if (null? ls)
                          0
@@ -120,5 +125,31 @@
                            '()
                            (cons (f (car ls)) (map f (cdr ls))) )) )
 
-(display (length '(a b c d))) (newline)
-(display (map (lambda (x) (+ 1 x)) '(1 2 3 4)))
+;; Strings
+
+(newline)
+
+(display "a string") (newline)
+(display "some numbers and symbols: 1 2 3 # @ <- cool!") (newline)
+(display "a string with a newline afterwards\n")
+(display "\ta string with an embedded tab") (newline)
+(display "a string with \"escaped\" quotes") (newline)
+(display "no need to 'escape' single quotes") (newline)
+(display "") (newline)
+(display "^ empty string above") (newline)
+
+;; Multiple statements in function body
+
+(newline)
+
+(define (print-with-newline x)
+  (display "PRINT-WITH-NEWLINE: ")
+  (display x)
+  (newline))
+
+(print-with-newline 'hello)
+
+((lambda (x)
+   (display "LAMBDA-VERSION: ")
+   (display x)
+   (newline)) "hello again")

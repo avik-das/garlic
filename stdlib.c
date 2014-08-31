@@ -99,6 +99,7 @@ struct frame_t * new_frame_with_parent(struct frame_t *parent) {
 enum scm_value_type {
     SCM_TYPE_LAMBDA = 0,
     SCM_TYPE_ATOM,
+    SCM_TYPE_STRING,
     SCM_TYPE_CONS
 };
 
@@ -115,6 +116,11 @@ struct scm_lambda {
 struct scm_atom {
     struct scm_value super;
     char* name;
+};
+
+struct scm_string {
+    struct scm_value super;
+    const char* contents;
 };
 
 struct scm_cons {
@@ -144,6 +150,14 @@ static inline int value_is_primitive(scm_value_t value) {
         value_is_fixnum(value) ||
         value_is_true(value) ||
         value_is_false(value);
+}
+
+static inline int value_is_string(scm_value_t value) {
+    if (value_is_primitive(value)) {
+        return 0;
+    }
+
+    return ((struct scm_value *) value)->type == SCM_TYPE_STRING;
 }
 
 static inline int value_is_lambda(scm_value_t value) {
@@ -192,6 +206,16 @@ scm_value_t make_atom_from_name(char *name) {
     atom->name = name;
 
     return atom;
+}
+
+scm_value_t make_string_with_contents(const char *contents) {
+    struct scm_string *string = (struct scm_string *)
+        malloc(sizeof(struct scm_string));
+
+    string->super.type = SCM_TYPE_STRING;
+    string->contents = contents;
+
+    return string;
 }
 
 scm_value_t make_cons(scm_value_t car_val, scm_value_t cdr_val) {
@@ -277,6 +301,8 @@ scm_value_t stdlib_impl_display(scm_value_t value) {
         printf("#f");
     } else if (value_is_fixnum(value)) {
         printf("%" PRId64, ((int64_t) value) >> 1);
+    } else if (value_is_string(value)) {
+        printf("%s", ((struct scm_string *) value)->contents);
     } else if (value_is_lambda(value)) {
         printf("#<fn: %p>", value);
     } else if (value_is_atom(value)) {
