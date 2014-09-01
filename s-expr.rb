@@ -58,26 +58,25 @@ end
 module AST
   class ParseException < Exception; end
 
+  module CommonTransformations
+    def with_hoisted_definitions(statements)
+      defines = statements.find_all { |s| s.is_a?(Definition) }
+      others  = statements.reject   { |s| s.is_a?(Definition) }
+
+      defines + others
+    end
+  end
+
   class Program
+    include CommonTransformations
+
     def initialize(*statements)
       @statements = statements
     end
 
-    def static_check_and_transform!
-      specialize
-      hoist_definitions!
-    end
-
-    def specialize
-      @statements = @statements.map(&:specialize)
-      self
-    end
-
-    def hoist_definitions!
-      defines = @statements.find_all { |s| s.is_a?(Definition) }
-      others  = @statements.reject   { |s| s.is_a?(Definition) }
-
-      @statements = defines + others
+    def static_transformed
+      @statements = @statements.map(&:static_transformed)
+      @statements = with_hoisted_definitions(@statements)
       self
     end
 
@@ -93,15 +92,11 @@ module AST
       false
     end
 
-    def static_check_and_transform!
+    def static_transformed
       self
     end
 
-    def specialize
-      self
-    end
-
-    def specialize_quoted
+    def specialized_quoted
       self
     end
   end
@@ -123,12 +118,16 @@ module AST
       @value = value
     end
 
-    def specialize
-      specialize_quoted
+    def static_transformed
+      specialized_quoted
     end
 
-    def specialize_quoted
-      @value.specialize_quoted
+    def specialized_quoted
+      @value.specialized_quoted
+    end
+
+    def to_s
+      "'#{value}"
     end
 
     attr :value
@@ -137,6 +136,10 @@ module AST
   class String < Node
     def initialize(contents)
       @contents = contents
+    end
+
+    def to_s
+      "\033[1;32m\"#{@contents}\"\033[0m"
     end
 
     attr :contents
@@ -192,7 +195,7 @@ module AST
       @name.to_s
     end
 
-    def specialize_quoted
+    def specialized_quoted
       QuotedAtom.new(@name)
     end
 
@@ -208,7 +211,7 @@ module AST
       @value.to_s
     end
 
-    def specialize_quoted
+    def specialized_quoted
       self
     end
 
@@ -222,7 +225,7 @@ module AST
       "#t"
     end
 
-    def specialize_quoted
+    def specialized_quoted
       self
     end
   end
@@ -234,7 +237,7 @@ module AST
       "#f"
     end
 
-    def specialize_quoted
+    def specialized_quoted
       self
     end
   end
@@ -248,7 +251,7 @@ module AST
       true
     end
 
-    def specialize
+    def static_transformed
       if @children.empty?
         self # TODO
       else
@@ -257,27 +260,35 @@ module AST
 
         filtered_children = @children.reject { |child| child.is_a?(Comment) }
 
-        if first_is_var
-          case first.name
+        specialized =
+          if first_is_var
+            case first.name
             when :define
-              return Definition.new(*filtered_children)
+              Definition.new(*filtered_children)
             when :lambda
-              return Lambda.new(*filtered_children)
+              Lambda.new(*filtered_children)
             when :if
-              return If.new(*filtered_children)
+              If.new(*filtered_children)
+            else
+              as_function_call
+            end
+          else
+            as_function_call
           end
-        end
 
-        specialized_children = @children.map(&:specialize)
-        FunctionCall.new(*specialized_children)
+        specialized.static_transformed
       end
     end
 
-    def specialize_quoted
+    def as_function_call
+      FunctionCall.new(*@children)
+    end
+
+    def specialized_quoted
       if @children.empty?
         Nil.instance
       else
-        quoted_children = @children.map(&:specialize_quoted)
+        quoted_children = @children.map(&:specialized_quoted)
         QuotedList.new(quoted_children)
       end
     end
@@ -309,25 +320,29 @@ module AST
 
   class Definition < SpecializedNode
     def initialize(*children)
-      if children[1].is_a?(Var)
-        unless children.size == 3
+      @children = children
+    end
+
+    def static_transformed
+      if @children[1].is_a?(Var)
+        unless @children.size == 3
           raise ParseException.new(
             "Variable definition must have 3 children, " +
-              "got #{children.size}: " +
-              "(#{children.join(" ")})")
+              "got #{@children.size}: " +
+              "(#{@children.join(" ")})")
         end
 
-        @name = children[1]
-        @value = children[2].specialize
-      elsif children[1].is_a?(NestedNode)
-        unless children.size >= 3
+        @name = @children[1]
+        @value = @children[2].static_transformed
+      elsif @children[1].is_a?(NestedNode)
+        unless @children.size >= 3
           raise ParseException.new(
             "Variable definition must have at least 3 children, " +
-              "got #{children.size}: " +
-              "(#{children.join(" ")})")
+              "got #{@children.size}: " +
+              "(#{@children.join(" ")})")
         end
 
-        signature = children[1].children
+        signature = @children[1].children
 
         if signature.empty?
           raise ParseException.new("Definition must have a name")
@@ -338,13 +353,15 @@ module AST
         @value = Lambda.new(
           :lambda,
           NestedNode.new(*signature[1, signature.size - 1]),
-          *children[2, children.length - 1]
-        )
+          *@children[2, @children.length - 1]
+        ).static_transformed
       else
         raise ParseException.new(
           "Definition name must be a var or list, got: " +
-            "#{children[1]} of type #{children[1].class}")
+            "#{@children[1]} of type #{@children[1].class}")
       end
+
+      self
     end
 
     def to_s
@@ -356,24 +373,30 @@ module AST
       "1;31"
     end
 
-    attr :name, :value
+    attr :name, :value, :children
   end
 
   class Lambda < SpecializedNode
+    include CommonTransformations
+
     def initialize(*children)
-      unless children.size >= 3
+      @children = children
+    end
+
+    def static_transformed
+      unless @children.size >= 3
         raise ParseException.new(
-          "Lambda must have at least 3 children, got #{children.size}: " +
-            "(#{children.join(" ")})")
+          "Lambda must have at least 3 children, got #{@children.size}: " +
+            "(#{@children.join(" ")})")
       end
 
-      unless children[1].has_children?
+      unless @children[1].has_children?
         raise ParseException.new(
           "Lambda parameter list must be a list, got: " +
-            "#{children[1]} of type #{children[1].class}")
+            "#{@children[1]} of type #{@children[1].class}")
       end
 
-      children[1].children.each do |param|
+      @children[1].children.each do |param|
         unless param.is_a?(Var)
           raise ParseException.new(
             "Lambda parameter must be a var, got: " +
@@ -381,26 +404,39 @@ module AST
         end
       end
 
-      @params = children[1].children
-      @body_statements = children[2, children.length - 1].map(&:specialize)
+      @params = @children[1].children
+
+      @body_statements = @children[2, children.length - 1]
+        .map(&:static_transformed)
+      @body_statements = with_hoisted_definitions(@body_statements)
+
+      self
     end
 
     def to_s
       "(\033[#{self.internal_color}mlambda\033[0m " +
-        "(\033[1m#{@params.join(" ")}\033[0m) " + body.to_s
+        "(\033[1m#{@params.join(" ")}\033[0m)\n" +
+        @body_statements.map(&:to_s).map { |s| "\t#{s}" }.join("\n") + ")"
     end
 
     def internal_color
       "1;33"
     end
 
-    attr :params, :body_statements
+    attr :params, :body_statements, :children
   end
 
   class FunctionCall < SpecializedNode
     def initialize(*children)
       @func = children.first
       @args = children[1, children.size - 1]
+    end
+
+    def static_transformed
+      @func = @func.static_transformed
+      @args = @args.map(&:static_transformed)
+
+      self
     end
 
     def to_s
@@ -422,15 +458,21 @@ module AST
 
   class If < SpecializedNode
     def initialize(*children)
-      unless children.size == 4
+      @children = children
+    end
+
+    def static_transformed
+      unless @children.size == 4
         raise ParseException.new(
-          "If must have 4 children, got #{children.size}: " +
-            "(#{children.join(" ")})")
+          "If must have 4 children, got #{@children.size}: " +
+            "(#{@children.join(" ")})")
       end
 
-      @cond = children[1].specialize
-      @true_expr = children[2].specialize
-      @false_expr = children[3].specialize
+      @cond = @children[1].static_transformed
+      @true_expr = @children[2].static_transformed
+      @false_expr = @children[3].static_transformed
+
+      self
     end
 
     def to_s
@@ -442,7 +484,7 @@ module AST
       "1;35"
     end
 
-    attr :cond, :true_expr, :false_expr
+    attr :cond, :true_expr, :false_expr, :children
   end
 
   class ASTTransform < Parslet::Transform
@@ -462,7 +504,7 @@ module AST
 
   def AST.construct_from_parse_tree(tree)
     ast = ASTTransform.new.apply(tree)
-    ast.static_check_and_transform!
+    ast = ast.static_transformed
   end
 end
 

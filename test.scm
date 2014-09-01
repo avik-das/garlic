@@ -64,11 +64,11 @@
 (display '#t) (newline)
 (display '#f) (newline)
 (display '(1 2 3)) (newline)
-(display '(1 '(2 3) 4)) (newline)
+(display '(1 (2 3) 4)) (newline)
 
 (newline)
 
-;; Nil.
+;; Nil
 (display '()) (newline)
 (display (display 'a)) (newline)
 
@@ -153,3 +153,18 @@
    (display "LAMBDA-VERSION: ")
    (display x)
    (newline)) "hello again")
+
+;; Scoped definitions
+
+(newline)
+
+(define shadowed 'outer)
+
+((lambda ()
+   (display shadowed)
+   (newline)
+   ; Again, the definition comes *after* the usage, but the definition is
+   ; hoist up to the top of the scope that defines the lambda body.
+   (define shadowed 'inner)) )
+
+(display shadowed) (newline)
