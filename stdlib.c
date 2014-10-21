@@ -236,7 +236,9 @@ scm_value_t make_cons(scm_value_t car_val, scm_value_t cdr_val) {
 map_t atom_db;
 
 void init_atom_db() {
-    atom_db = hashmap_new();
+    if (atom_db == NULL) {
+        atom_db = hashmap_new();
+    }
 }
 
 void create_atom(char *name) {

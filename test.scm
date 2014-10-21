@@ -1,3 +1,8 @@
+;; Note that a loading message will be displayed first, since all required
+;; modules are initialized at the very beginning.
+
+(newline)
+
 ;; Adds the three numberical inputs.
 (define addthreenums
   ;; This doesn't use the procedure definition syntax
@@ -168,3 +173,15 @@
    (define shadowed 'inner)) )
 
 (display shadowed) (newline)
+
+;; Multiple modules
+
+(newline)
+
+(require stdlib)
+
+; Some of these functions have the same name as ones defined in this file, but
+; there is no conflict due to namespacing.
+(display (stdlib:length '(a b c d))) (newline)
+(display (stdlib:map (lambda (x) (+ 1 x)) '(1 2 3 4))) (newline)
+(display (stdlib:reject null? '(1 '() 3 '()))) (newline)

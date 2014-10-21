@@ -1,24 +1,34 @@
-(define not
-        (lambda (val) (if val #f #t)))
+(display "loading stdlib...")
+(newline)
 
-(define cons
-        (lambda (x y)
-                (lambda (f) (f x y)) ))
+(define (not val)
+        (if val #f #t))
 
-(define car
-        (lambda (pair)
-                (pair (lambda (x y) x)) ))
+(define (length ls)
+        (if (null? ls)
+            0
+            (+ 1 (length (cdr ls))) ) )
 
-(define cdr
-        (lambda (pair)
-                (pair (lambda (x y) y)) ))
+(define (map f ls)
+        (if (null? ls)
+            '()
+            (cons (f (car ls)) (map f (cdr ls))) ) )
 
-(define map
-        (lambda (f ls) (if ls
-                           (cons (f (car ls)) (map f (cdr ls)))
-                           (quote ())) ))
+(define (filter f ls)
+        (if (null? ls)
+            '()
+            (if (f (car ls))
+                (cons (car ls) (filter f (cdr ls)))
+                (filter f (cdr ls)) ) ) )
 
-(define length
-        (lambda (ls) (if ls
-                         (+ 1 (length (cdr ls)))
-                         0)) )
+(define (reject f ls)
+        (filter (lambda (x) (not (f x))) ls) )
+
+(display "[stdlib-test] ")
+(display (length '(1 2 3)))
+
+(module-export
+  length
+  map
+  filter
+  reject)

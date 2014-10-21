@@ -13,9 +13,14 @@ class Scheme < Parslet::Parser
 
   rule(:int)       { match('[0-9]').repeat(1).as(:int) }
   rule(:bool)      { str('#t').as(:true) | str('#f').as(:false) }
+
+  rule(:simplevar) {
+    match('[A-Za-z\-\+\*\/_]') >>
+      match('[A-Za-z\-\+\*\/_\?0-9]').repeat(1).maybe
+  }
+
   rule(:var)       {
-    (match('[A-Za-z\-\+\*\/_]') >>
-      match('[A-Za-z\-\+\*\/_\?0-9]').repeat(1).maybe).as(:var)
+    ((simplevar >> str(':') >> simplevar) | simplevar).as(:var)
   }
 
   rule(:list)      {
@@ -75,9 +80,47 @@ module AST
     end
 
     def static_transformed
+      @statements, module_requires = separated_module_requires(@statements)
+      @statements, module_exports = separated_module_exports(@statements)
       @statements = @statements.map(&:static_transformed)
       @statements = with_hoisted_definitions(@statements)
+
+      @module_requires = gathered_requires(module_requires)
+      @module_exports = gathered_exports(module_exports)
+
       self
+    end
+
+    def separated_module_requires(statements)
+      separated_statements_of_type(:require)
+    end
+
+    def separated_module_exports(statements)
+      separated_statements_of_type(:'module-export')
+    end
+
+    def separated_statements_of_type(type)
+      statements.partition { |statement|
+        statement.is_a?(NestedNode) &&
+          !statement.children.empty? &&
+          statement.children[0].is_a?(Var) &&
+          statement.children[0].name == type
+      }.reverse
+    end
+
+    def gathered_requires(module_exports)
+      module_exports.map { |exp|
+        exp.children[1].name
+      }.flatten
+    end
+
+    def gathered_exports(module_exports)
+      module_exports.map { |exp|
+        exp
+          .children
+          .drop(1)
+          .map(&:name)
+      }.flatten
     end
 
     def to_s
@@ -263,6 +306,14 @@ module AST
         specialized =
           if first_is_var
             case first.name
+            # If we find a require or a module-export, it means it was not
+            # removed by the relevant pre-processing step, which only looks at
+            # the top-level statements. Thus, this statement is nested, which
+            # is illegal.
+            when :require
+              raise ParseException.new("require found in nested scope")
+            when :'module-export'
+              raise ParseException.new("module-export found in nested scope")
             when :define
               Definition.new(*filtered_children)
             when :lambda
@@ -512,14 +563,28 @@ end
 
 module AST
   class Program
-    def codegen(filename)
-      vm = VM::VM.new(filename)
+    def codegen(filename, symbol_prefix, is_main)
+      vm = VM::VM.new(
+        filename,
+        symbol_prefix,
+        is_main,
+        @module_requires,
+        @module_exports
+      )
 
       @statements.each do |statement|
         statement.codegen(vm)
       end
 
       vm.commit
+
+      @module_requires.each do |name|
+        compile_file("#{name}.scm", name, false)
+
+        # There is no need to emit a call to initialize the newly compiled
+        # module. This is because all the initialization calls will be made by
+        # the VM as part of the prologue.
+      end
     end
   end
 
@@ -532,7 +597,7 @@ module AST
   class QuotedAtom < Node
     def codegen(vm)
       name = vm.addquotedatom(@name)
-      vm.movdata "#{name}_name", "%rdi"
+      vm.movlabelreg "#{name}_name", "%rdi"
       vm.with_aligned_stack do
         vm.call "get_atom"
       end
@@ -563,7 +628,7 @@ module AST
   class String < Node
     def codegen(vm)
       name = vm.addstring(@contents)
-      vm.movdata "#{name}_contents", "%rdi"
+      vm.movlabelreg "#{name}_contents", "%rdi"
 
       vm.with_aligned_stack do
         vm.call "make_string_with_contents"
@@ -579,12 +644,19 @@ module AST
 
   class Var < Node
     def codegen(vm)
-      varname = vm.addvarname(self)
+      if name.to_s.include?(":")
+        module_prefix, internal_name = name.to_s.split(":")
+        vm.with_aligned_stack do
+          vm.call "module_get_#{module_prefix}_#{internal_name}"
+        end
+      else
+        varname = vm.addvarname(self)
 
-      vm.argframe
-      vm.movdata varname, "%rsi"
-      vm.with_aligned_stack do
-        vm.call "find_in_frame"
+        vm.argframe
+        vm.movlabelreg varname, "%rsi"
+        vm.with_aligned_stack do
+          vm.call "find_in_frame"
+        end
       end
     end
   end
@@ -615,7 +687,7 @@ module AST
       @value.codegen(vm)
       # now the value is in %rax
       vm.argframe
-      vm.movdata varname, "%rsi"
+      vm.movlabelreg varname, "%rsi"
       vm.asm "        mov     %rax, %rdx"
       vm.with_aligned_stack do
         vm.call "add_to_frame"
@@ -664,7 +736,7 @@ module AST
         offset = 32 + (i * 8)
 
         vm.argframe
-        vm.movdata varname, "%rsi"
+        vm.movlabelreg varname, "%rsi"
         vm.asm "        mov     #{offset}(%rsp), %rdx"
         vm.with_aligned_stack do
           vm.call "add_to_frame"
@@ -683,7 +755,7 @@ module AST
       # generate the actual lambda
 
       vm.argframe
-      vm.movdata name, "%rsi"
+      vm.movlabelreg name, "%rsi"
       vm.with_aligned_stack do
         vm.call "make_fn"
       end
@@ -739,13 +811,28 @@ end
 
 module VM
   class VM
-    def initialize(filename)
+    def initialize(filename,
+                   symbol_prefix,
+                   is_main,
+                   module_requires,
+                   module_exports)
+      # VM properties
       @filename = filename
+      @symbol_prefix = symbol_prefix
+      @is_main = is_main
+      @module_requires = module_requires
+      @module_exports = module_exports
+
       @statements = []
+
+      # names
       @varnames = {}
       @quotedatoms = {}
       @stringnames = {}
+
       @frame_offsets = [8]
+
+      # counters
       @currfn = 0
       @currcond = 0
 
@@ -753,6 +840,13 @@ module VM
     end
 
     def prologue
+      main_name =
+        if @is_main
+          "main"
+        else
+          "init_#{@symbol_prefix}"
+        end
+
       asm("# " + ("-" * 77))
       asm "# compiled.S"
       asm("# " + ("-" * 77))
@@ -769,20 +863,36 @@ module VM
       asm ""
 
       asm "#if defined(__APPLE__)"
-      asm "# define movdata(src, dst) movq    src##\@GOTPCREL(%rip), dst"
+      asm "# define movlabelreg(src, dst) movq    src##\@GOTPCREL(%rip), dst"
       asm "#else"
-      asm "# define movdata(src, dst) mov     $##src##, dst"
+      asm "# define movlabelreg(src, dst) mov     $##src##, dst"
       asm "#endif"
 
       asm ""
-      asm "        .global cdecl(main)"
+
+      asm "#if defined(__APPLE__)"
+      asm "# define movreglabel(src, dst) movq    src, dst##\@GOTPCREL(%rip)"
+      asm "#else"
+      asm "# define movreglabel(src, dst) movq    src, dst"
+      asm "#endif"
+
+      asm ""
+      asm "        .global cdecl(#{main_name})"
       asm ""
       asm "        .text"
-      asm "cdecl(main):"
+      asm "cdecl(#{main_name}):"
       asm "        sub     $8, %rsp"
-      asm "        call    create_atoms"
+      asm "        call    #{@symbol_prefix}_create_atoms"
       call "new_root_frame"
+      asm "        movreglabel(%rax, #{@symbol_prefix}_root_frame)"
       asm "        push    %rax"
+
+      asm ""
+      asm "        sub     $8, %rsp"
+      @module_requires.each do |name|
+        call "init_#{name}"
+      end
+      asm "        add     $8, %rsp"
     end
 
     def epilogue
@@ -792,19 +902,39 @@ module VM
       asm "        ret"
       asm ""
 
-      asm "create_atoms:"
+      asm "#{@symbol_prefix}_create_atoms:"
       asm "        sub     $8, %rsp"
+
       call "init_atom_db"
 
-      asm ""
       @quotedatoms.each do |name, label|
-        movdata "#{label}_name", "%rdi"
+        movlabelreg "#{label}_name", "%rdi"
         call "create_atom"
       end
       asm ""
 
       asm "        add     $8, %rsp"
       asm "        ret"
+
+      asm ""
+      @module_exports.each do |name|
+        # TODO: error checking
+        internal_label = @varnames[name.to_s]
+
+        getter_name = "module_get_#{@symbol_prefix}_#{name}"
+
+        asm "        .global #{getter_name}"
+        asm "#{getter_name}:"
+        asm "        sub     $8, %rsp"
+
+        asm "        movlabelreg(#{@symbol_prefix}_root_frame, %rdi)"
+        asm "        mov     (%rdi), %rdi"
+        asm "        movlabelreg(#{internal_label}, %rsi)"
+
+        call "find_in_frame"
+        asm "        add     $8, %rsp"
+        asm "        ret"
+      end
       asm ""
 
       asm "        .data"
@@ -828,6 +958,10 @@ module VM
         asm "#{label}_contents:"
         asm "        .asciz  \"#{contents}\""
       end
+
+      asm ""
+      asm "#{@symbol_prefix}_root_frame:"
+      asm "        .quad 0"
     end
 
     def commit
@@ -844,7 +978,7 @@ module VM
       if @varnames.has_key?(name_str)
         @varnames[name_str]
       else
-        label = "var_#{Digest::MD5.hexdigest(name_str)}"
+        label = "#{@symbol_prefix}_var_#{Digest::MD5.hexdigest(name_str)}"
         @varnames[name_str] = label
         label
       end
@@ -856,7 +990,7 @@ module VM
       if @quotedatoms.has_key?(name_str)
         @quotedatoms[name_str]
       else
-        label = "atom_#{Digest::MD5.hexdigest(name_str)}"
+        label = "#{@symbol_prefix}_atom_#{Digest::MD5.hexdigest(name_str)}"
         @quotedatoms[name_str] = label
         label
       end
@@ -868,20 +1002,21 @@ module VM
       if @stringnames.has_key?(contents_str)
         @stringnames[contents_str]
       else
-        label = "string_#{Digest::MD5.hexdigest(contents_str)}"
+        label =
+          "#{@symbol_prefix}_string_#{Digest::MD5.hexdigest(contents_str)}"
         @stringnames[contents_str] = label
         label
       end
     end
 
     def genfnname
-      name = "fn_#{@currfn}"
+      name = "#{@symbol_prefix}_fn_#{@currfn}"
       @currfn += 1
       name
     end
 
     def gencondname
-      name = "cond_#{@currcond}"
+      name = "#{@symbol_prefix}_cond_#{@currcond}"
       @currcond += 1
       name
     end
@@ -955,8 +1090,8 @@ module VM
       asm "        call    cdecl(#{fnname})"
     end
 
-    def movdata(src, dst)
-      asm "        movdata(#{src}, #{dst})"
+    def movlabelreg(src, dst)
+      asm "        movlabelreg(#{src}, #{dst})"
     end
 
     def with_aligned_stack(num_args_to_push = 0)
@@ -1015,12 +1150,12 @@ def create_fresh_build_env(out_exe_name, build_dir_name)
   FileUtils.mkdir_p(build_dir_name)
 end
 
-def compile_file(filename, symbol_prefix)
+def compile_file(filename, symbol_prefix, is_main)
   file = File.read(filename)
   parsed = Scheme.new.parse(file)
   ast = AST.construct_from_parse_tree(parsed)
 
-  ast.codegen("#{BUILD_DIR}/#{filename}.S")
+  ast.codegen("#{BUILD_DIR}/#{filename}.S", symbol_prefix, is_main)
 end
 
 def run_gcc(out_filename)
@@ -1032,7 +1167,7 @@ end
 # TODO: check arguments (possibly read from stdin)
 
 create_fresh_build_env(OUT_EXE, BUILD_DIR)
-compile_file(ARGV[0], 'main')
+compile_file(ARGV[0], 'main', true)
 run_gcc(OUT_EXE)
 
 # vim: ts=2 sw=2 :
