@@ -25,7 +25,7 @@
         (filter (lambda (x) (not (f x))) ls) )
 
 (display "[stdlib-test] ")
-(display (length '(1 2 3)))
+(display (length '(1 2 3))) (newline)
 
 (module-export
   length

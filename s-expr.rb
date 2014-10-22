@@ -647,7 +647,11 @@ module AST
       if name.to_s.include?(":")
         module_prefix, internal_name = name.to_s.split(":")
         vm.with_aligned_stack do
-          vm.call "module_get_#{module_prefix}_#{internal_name}"
+          getter_name = VM::VM.getter_name_for_exported_symbol(
+            module_prefix,
+            internal_name
+          )
+          vm.call getter_name
         end
       else
         varname = vm.addvarname(self)
@@ -812,13 +816,14 @@ end
 module VM
   class VM
     def initialize(filename,
-                   symbol_prefix,
+                   module_name,
                    is_main,
                    module_requires,
                    module_exports)
       # VM properties
       @filename = filename
-      @symbol_prefix = symbol_prefix
+      @module_name = module_name
+      @symbol_prefix = VM.symbol_prefix_from_module_name(module_name)
       @is_main = is_main
       @module_requires = module_requires
       @module_exports = module_exports
@@ -837,6 +842,12 @@ module VM
       @currcond = 0
 
       prologue
+    end
+
+    def self.getter_name_for_exported_symbol(module_name, symbol_name)
+      symbol_prefix = symbol_prefix_from_module_name(module_name)
+      normalized_symbol_name = normalized_name_for_name(symbol_name)
+      getter_name = "module_get_#{symbol_prefix}_#{normalized_symbol_name}"
     end
 
     def prologue
@@ -890,7 +901,7 @@ module VM
       asm ""
       asm "        sub     $8, %rsp"
       @module_requires.each do |name|
-        call "init_#{name}"
+        call "init_#{VM.symbol_prefix_from_module_name(name)}"
       end
       asm "        add     $8, %rsp"
     end
@@ -921,7 +932,7 @@ module VM
         # TODO: error checking
         internal_label = @varnames[name.to_s]
 
-        getter_name = "module_get_#{@symbol_prefix}_#{name}"
+        getter_name = VM.getter_name_for_exported_symbol(@module_name, name)
 
         asm "        .global #{getter_name}"
         asm "#{getter_name}:"
@@ -1130,6 +1141,22 @@ module VM
     def asm(statement)
       @statements << statement
     end
+
+    private
+
+    def self.normalized_name_for_name(name)
+      name = name.to_s
+      normalized_name = name.gsub(/[^a-z_]+/i, '_')
+      normalized_name = 'empty' if normalized_name.empty?
+      normalized_name
+    end
+
+    def self.symbol_prefix_from_module_name(module_name)
+      normalized_name = normalized_name_for_name(module_name)
+
+      "#{normalized_name}_#{Digest::MD5.hexdigest(module_name.to_s)}"
+    end
+
   end
 end
 

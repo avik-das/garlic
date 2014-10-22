@@ -1,4 +1,4 @@
-;; Note that a loading message will be displayed first, since all required
+;; Note that some loading messages will be displayed first, since all required
 ;; modules are initialized at the very beginning.
 
 (newline)
@@ -179,9 +179,17 @@
 (newline)
 
 (require stdlib)
+(require display-helpers)
 
 ; Some of these functions have the same name as ones defined in this file, but
 ; there is no conflict due to namespacing.
 (display (stdlib:length '(a b c d))) (newline)
 (display (stdlib:map (lambda (x) (+ 1 x)) '(1 2 3 4))) (newline)
 (display (stdlib:reject null? '(1 '() 3 '()))) (newline)
+
+(newline)
+
+(display-helpers:display-with-tag
+  "INFO"
+  "this is calling a function in print-helpers")
+(display-helpers:display-with-tag "DEBUG" "debugging output...")
