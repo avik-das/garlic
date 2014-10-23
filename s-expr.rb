@@ -892,6 +892,11 @@ module VM
       asm ""
       asm "        .text"
       asm "cdecl(#{main_name}):"
+      asm "        cmp     $0, #{@symbol_prefix}_is_initialized"
+      asm "        je      #{main_name}_do_init"
+      asm "        ret"
+      asm "#{main_name}_do_init:"
+      asm "        movreglabel($1, #{@symbol_prefix}_is_initialized)"
       asm "        sub     $8, %rsp"
       asm "        call    #{@symbol_prefix}_create_atoms"
       call "new_root_frame"
@@ -972,6 +977,8 @@ module VM
 
       asm ""
       asm "#{@symbol_prefix}_root_frame:"
+      asm "        .quad 0"
+      asm "#{@symbol_prefix}_is_initialized:"
       asm "        .quad 0"
     end
 

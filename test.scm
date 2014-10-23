@@ -193,3 +193,8 @@
   "INFO"
   "this is calling a function in print-helpers")
 (display-helpers:display-with-tag "DEBUG" "debugging output...")
+
+(newline)
+
+(display-helpers:display-non-null
+  '("one" () "two" () "three"))

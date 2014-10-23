@@ -1,3 +1,5 @@
+(require stdlib)
+
 (display "loading display-helpers...")
 (newline)
 
@@ -8,5 +10,10 @@
         (display message)
         (newline))
 
+(define (display-non-null messages)
+  (stdlib:foreach (lambda (msg) (display msg) (newline))
+           (stdlib:filter (stdlib:compose stdlib:not null?) messages)) )
+
 (module-export
-  display-with-tag)
+  display-with-tag
+  display-non-null)
