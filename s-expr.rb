@@ -882,7 +882,19 @@ module VM
       asm ""
 
       asm "#if defined(__APPLE__)"
-      asm "# define movreglabel(src, dst) movq    src, dst##\@GOTPCREL(%rip)"
+      asm "# define movlabelvalreg(src, dst) \\"
+      asm "    movq    src##\@GOTPCREL(%rip), %r8 ;\\"
+      asm "    movq    (%r8), dst"
+      asm "#else"
+      asm "# define movlabelvalreg(src, dst) movq    src##, dst"
+      asm "#endif"
+
+      asm ""
+
+      asm "#if defined(__APPLE__)"
+      asm "# define movreglabel(src, dst) \\"
+      asm "    movq    dst##\@GOTPCREL(%rip), %r8 ;\\"
+      asm "    movq    src, (%r8)"
       asm "#else"
       asm "# define movreglabel(src, dst) movq    src, dst"
       asm "#endif"
@@ -892,7 +904,8 @@ module VM
       asm ""
       asm "        .text"
       asm "cdecl(#{main_name}):"
-      asm "        cmp     $0, #{@symbol_prefix}_is_initialized"
+      asm "        movlabelvalreg(#{@symbol_prefix}_is_initialized, %rax)"
+      asm "        cmpq    $0, %rax"
       asm "        je      #{main_name}_do_init"
       asm "        ret"
       asm "#{main_name}_do_init:"
@@ -939,8 +952,8 @@ module VM
 
         getter_name = VM.getter_name_for_exported_symbol(@module_name, name)
 
-        asm "        .global #{getter_name}"
-        asm "#{getter_name}:"
+        asm "        .global cdecl(#{getter_name})"
+        asm "cdecl(#{getter_name}):"
         asm "        sub     $8, %rsp"
 
         asm "        movlabelreg(#{@symbol_prefix}_root_frame, %rdi)"
