@@ -62,6 +62,23 @@
 
 (newline)
 
+; Variable number of arguments
+
+(display (+)) (newline)
+(display (+ 1)) (newline)
+(display (+ 1 2)) (newline)
+(display (+ 1 2 3)) (newline)
+(display (+ 1 2 3 4)) (newline)
+(display (+ 1 2 3 4 5)) (newline)
+
+(display (*)) (newline)
+(display (* 2)) (newline)
+(display (* 2 3)) (newline)
+(display (* 2 3 4)) (newline)
+(display (* 2 3 4 5)) (newline)
+
+(newline)
+
 ;; Quoted values
 
 (display 'a) (newline)

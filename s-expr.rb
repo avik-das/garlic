@@ -774,9 +774,15 @@ module AST
       # after all the arguments have been pushed onto the stack, the ones that
       # fit in the registers can be popped off one by one before calling the
       # function.
+      #
+      # Certain arguments should be ignored completely, namely comments, since
+      # they do not produce any values in %rax that need to be pushed onto the
+      # stack. They should not contribute to the number of arguments either.
 
-      vm.with_aligned_stack(@args.size) do
-        @args.reverse.each do |arg|
+      filtered_args = @args.reject { |arg| arg.is_a?(Comment) }
+
+      vm.with_aligned_stack(filtered_args.size) do
+        filtered_args.reverse.each do |arg|
           arg.codegen(vm)
           vm.push("%rax")
         end
@@ -785,9 +791,10 @@ module AST
         @func.codegen(vm)
 
         vm.asm "        mov     %rax, %rdi"
+        vm.asm "        mov     $#{filtered_args.size}, %rsi"
         vm.call "scm_fncall"
 
-        vm.popn(@args.size)
+        vm.popn(filtered_args.size)
       end
     end
   end
@@ -918,6 +925,7 @@ module VM
 
       asm ""
       asm "        sub     $8, %rsp"
+      asm "        # module imports"
       @module_requires.each do |name|
         call "init_#{VM.symbol_prefix_from_module_name(name)}"
       end
@@ -1142,7 +1150,9 @@ module VM
       is_stack_aligned = (lstoffset / 8) % 2 == 1
       has_even_num_args = num_args_to_push % 2 == 0
 
-      should_not_align_stack = is_stack_aligned and has_even_num_args
+      should_not_align_stack =
+        ( is_stack_aligned &&  has_even_num_args) ||
+        (!is_stack_aligned && !has_even_num_args)
       should_align_stack = !should_not_align_stack
 
       if should_align_stack

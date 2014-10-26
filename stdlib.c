@@ -21,8 +21,8 @@ scm_value_t stdlib_nullp(scm_value_t value);
 scm_value_t stdlib_display(scm_value_t value);
 scm_value_t stdlib_newline();
 
-scm_value_t stdlib_impl_sum(scm_value_t a_val, scm_value_t b_val);
-scm_value_t stdlib_impl_mul(scm_value_t a_val, scm_value_t b_val);
+scm_value_t stdlib_impl_sum(scm_value_t vals);
+scm_value_t stdlib_impl_mul(scm_value_t vals);
 scm_value_t stdlib_impl_nullp(scm_value_t value);
 scm_value_t stdlib_impl_display(scm_value_t value);
 scm_value_t stdlib_impl_newline();
@@ -255,22 +255,32 @@ scm_value_t get_atom(char *name) {
 
 /** STANDARD FUNCTIONS ********************************************************/
 
-scm_value_t stdlib_impl_sum(scm_value_t a_val, scm_value_t b_val) {
-    //printf("summing %ld + %ld\n", (int64_t) a_val, (int64_t) b_val);
-    int64_t a = ((int64_t) a_val) ^ 1;
-    int64_t b = ((int64_t) b_val) ^ 1;
-    int64_t c = a + b;
+scm_value_t stdlib_impl_sum(scm_value_t vals) {
+    int64_t sum = 0;
 
-    return (scm_value_t) (c | 1);
+    struct scm_cons *valslist = (struct scm_cons *) vals;
+
+    while (valslist != NIL_VALUE) {
+        scm_value_t val = valslist->car;
+        sum += ((int64_t) val) ^ 1;
+        valslist = valslist->cdr;
+    }
+
+    return (scm_value_t) (sum | 1);
 }
 
-scm_value_t stdlib_impl_mul(scm_value_t a_val, scm_value_t b_val) {
-    //printf("multiplying %ld + %ld\n", (int64_t) a_val, (int64_t) b_val);
-    int64_t a = ((int64_t) a_val) >> 1;
-    int64_t b = ((int64_t) b_val) >> 1;
-    int64_t c = a * b;
+scm_value_t stdlib_impl_mul(scm_value_t vals) {
+    int64_t prod = 1;
 
-    return (scm_value_t) ((c << 1) | 1);
+    struct scm_cons *valslist = (struct scm_cons *) vals;
+
+    while (valslist != NIL_VALUE) {
+        scm_value_t val = valslist->car;
+        prod *= ((int64_t) val) >> 1;
+        valslist = valslist->cdr;
+    }
+
+    return (scm_value_t) ((prod << 1) | 1);
 }
 
 scm_value_t stdlib_impl_nullp(scm_value_t value) {
