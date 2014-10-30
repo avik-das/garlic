@@ -60,11 +60,12 @@ cdecl(gather_varargs):
         #        stack frame pushed by scm_fncall
         #        first argument to gather
 
-        mov     %rsi, %r8               # save the number of arguments to gather
+        mov     %rsi, %r8               # save the number of arguments
         mov     %rsp, %r9               # save the stack pointer
         add     $40, %r9                #   but start at the first argument
-        mov     $0, %rsi                # load nil as the last element of the
-gather_varargs_begin:                   #   resulting list
+        mov     $0, %rsi                # load nil as the last list element
+        mov     %r8, %r10               # %r8 will be used as the loop counter
+gather_varargs_begin:                   #   so save the original value too
         cmp     $0, %r8                 # check that we have more arguments
         je      gather_varargs_done     # otherwise we're done
 
@@ -81,8 +82,8 @@ gather_varargs_begin:                   #   resulting list
         sub     $1, %r8                 # we have one fewer argument to gather
         jmp     gather_varargs_begin    # loop
 gather_varargs_done:
-        mov     %rsi, %rax
-        mov     %r8, %rsi
+        mov     %rsi, %rax              # return the resulting list
+        mov     %r10, %rsi              # restore the number of arguments
         ret
 
 cdecl(stdlib_sum):
@@ -105,8 +106,8 @@ cdecl(stdlib_mul):
 
 cdecl(stdlib_cons):
         # ignore the pushed frame
-        mov     24(%rsp), %rdi
-        mov     32(%rsp), %rsi
+        mov     32(%rsp), %rdi
+        mov     24(%rsp), %rsi
         sub     $8, %rsp
         call    cdecl(make_cons)
         add     $8, %rsp

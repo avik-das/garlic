@@ -62,23 +62,6 @@
 
 (newline)
 
-; Variable number of arguments
-
-(display (+)) (newline)
-(display (+ 1)) (newline)
-(display (+ 1 2)) (newline)
-(display (+ 1 2 3)) (newline)
-(display (+ 1 2 3 4)) (newline)
-(display (+ 1 2 3 4 5)) (newline)
-
-(display (*)) (newline)
-(display (* 2)) (newline)
-(display (* 2 3)) (newline)
-(display (* 2 3 4)) (newline)
-(display (* 2 3 4 5)) (newline)
-
-(newline)
-
 ;; Quoted values
 
 (display 'a) (newline)
@@ -91,12 +74,14 @@
 (newline)
 
 ;; Nil
+
 (display '()) (newline)
 (display (display 'a)) (newline)
 
 (newline)
 
 ;; Cons cells.
+
 (define threecons (cons 1 (cons 2 3)))
 (display threecons) (newline)
 (display (car threecons)) (newline)
@@ -146,6 +131,15 @@
         (lambda (f ls) (if (null? ls)
                            '()
                            (cons (f (car ls)) (map f (cdr ls))) )) )
+
+(newline)
+
+;; Improper lists
+
+(display '(1 . 2)) (newline)
+(display '(1 2 . 3)) (newline)
+(display (cdr '(1 2 . 3))) (newline)
+(display (cdr (cdr '(1 2 . 3)))) (newline)
 
 ;; Strings
 
@@ -215,3 +209,30 @@
 
 (display-helpers:display-non-null
   '("one" () "two" () "three"))
+
+(newline)
+
+;; Variable number of arguments
+
+(display (+)) (newline)
+(display (+ 1)) (newline)
+(display (+ 1 2)) (newline)
+(display (+ 1 2 3)) (newline)
+(display (+ 1 2 3 4)) (newline)
+(display (+ 1 2 3 4 5)) (newline)
+
+(display (*)) (newline)
+(display (* 2)) (newline)
+(display (* 2 3)) (newline)
+(display (* 2 3 4)) (newline)
+(display (* 2 3 4 5)) (newline)
+
+; NOTE: varargs don't quite work yet. However, the following is present to show
+; what the goal is. The infrastructure is being built out. Note that improper
+; cons lists, which are syntactically similar to the argument lists of variadic
+; functions, do work.
+
+; (newline)
+;
+; (define (varargs x y . z) (cons (+ x y) z))
+; (display (varargs 1 2 3 4 5))

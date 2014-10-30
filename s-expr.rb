@@ -34,8 +34,23 @@ class Scheme < Parslet::Parser
       str(')')
   }
 
+  rule(:dotlist)   {
+    str('(') >>
+      space? >>
+      # Make sure to use .repeat(0, 1) instead of .maybe, since we always want
+      # a list in the parse tree, regardless of whether it matched one sub-
+      # expression or more.
+      (
+        (expr >> (space >> expr).repeat(1).maybe).repeat(0, 1) >>
+        space >> str('.') >> space >>
+        expr
+      ).as(:dotlist) >>
+      space? >>
+      str(')')
+  }
+
   rule(:quoted)     {
-    str('\'') >> (atom | list).as(:quoted)
+    str('\'') >> (atom | dotlist | list).as(:quoted)
   }
 
   rule(:string)     {
@@ -52,7 +67,7 @@ class Scheme < Parslet::Parser
   }
 
   rule(:atom)      { int | bool | var }
-  rule(:expr)      { atom | list | quoted | string | comment }
+  rule(:expr)      { atom | list | dotlist | quoted | string | comment }
   rule(:expr_list) { ((space? >> expr).repeat(1).maybe >> space?).as(:exprs) }
 
   root(:expr_list)
@@ -201,7 +216,8 @@ module AST
   end
 
   class QuotedList < Node
-    def initialize(children)
+    def initialize(is_nil_terminated, children)
+      @is_nil_terminated = is_nil_terminated
       @children = children
     end
 
@@ -210,15 +226,19 @@ module AST
     end
 
     def to_s
-      children_str = @children.map(&:to_s).join(" ")
-      if not children_str.empty?
-        children_str = " #{children_str}"
+      children_list = @children.map(&:to_s)
+
+      if is_nil_terminated
+        last_child = children_list.pop
+        children_list << "."
+        children_list << last_child
       end
 
-      "(\033[1;34mlist\033[0m#{children_str})"
+      children_str = children_list.join(" ")
+      "'(#{children_str})"
     end
 
-    attr :children
+    attr :is_nil_terminated, :children
   end
 
   class Nil < Node
@@ -285,6 +305,12 @@ module AST
     end
   end
 
+  class SpecializedNode < Node
+    def has_children?
+      true
+    end
+  end
+
   class NestedNode < Node
     def initialize(*children)
       @children = children
@@ -340,7 +366,7 @@ module AST
         Nil.instance
       else
         quoted_children = @children.map(&:specialized_quoted)
-        QuotedList.new(quoted_children)
+        QuotedList.new(false, quoted_children)
       end
     end
 
@@ -357,6 +383,56 @@ module AST
         end
       }.join(" ")
 
+      "(#{children_str})"
+    end
+
+    attr :children
+  end
+
+  class DottedList < NestedNode
+    def initialize(*children)
+      @children = children
+    end
+
+    def has_children?
+      true
+    end
+
+    def static_transformed
+      # A dotted list never appears on its own. There are two cases where a
+      # dotted list are encountered:
+      #
+      #  - In a special form, such as in the argument list of a function
+      #    definition. These situations are handled specially by the parent
+      #    node's static transformation.
+      #
+      #  - In a quoted list, which is taken care of by "specialized_quoted".
+      raise ParseException.new("invalid dotted list")
+    end
+
+    def specialized_quoted
+      quoted_children = @children.map(&:specialized_quoted)
+      QuotedList.new(true, quoted_children)
+    end
+
+    def internal_color
+      "1;32"
+    end
+
+    def to_s
+      children_list = @children.map { |child|
+        if child.has_children?
+          child.to_s
+        else
+          "\033[#{self.internal_color}m#{child}\033[0m"
+        end
+      }
+
+      last_child = children_list.pop
+      children_list << "."
+      children_list << last_child
+
+      children_str = children_list.join(" ")
       "(#{children_str})"
     end
 
@@ -401,10 +477,17 @@ module AST
 
         @name = signature[0]
 
+        params_array = signature.drop(1)
+        if @children[1].is_a?(DottedList)
+          params = DottedList.new(*params_array)
+        else
+          params = NestedNode.new(*params_array)
+        end
+
         @value = Lambda.new(
           :lambda,
-          NestedNode.new(*signature[1, signature.size - 1]),
-          *@children[2, @children.length - 1]
+          params,
+          *@children.drop(2)
         ).static_transformed
       else
         raise ParseException.new(
@@ -455,7 +538,15 @@ module AST
         end
       end
 
-      @params = @children[1].children
+      if @children[1].is_a?(DottedList)
+        @params = @children[1].children.take(@children[1].children.size - 1)
+        @rest_param = @children[1].children.last
+        @is_vararg = true
+      else
+        @params = @children[1].children
+        @rest_param = nil
+        @is_vararg = false
+      end
 
       @body_statements = @children[2, children.length - 1]
         .map(&:static_transformed)
@@ -474,7 +565,7 @@ module AST
       "1;33"
     end
 
-    attr :params, :body_statements, :children
+    attr :params, :rest_param, :is_vararg, :body_statements, :children
   end
 
   class FunctionCall < SpecializedNode
@@ -545,6 +636,7 @@ module AST
     rule(false: simple(:x))   { FalseVal.instance }
 
     rule(list: sequence(:x))  { NestedNode.new(*x) }
+    rule(dotlist: sequence(:x))  { DottedList.new(*x) }
 
     rule(quoted: simple(:q))  { Quoted.new(q) }
     rule(string: simple(:s))  { String.new(s) }
@@ -606,16 +698,20 @@ module AST
 
   class QuotedList < Node
     def codegen(vm)
-      vm.asm "        mov     $0, %rsi"
+      vm.asm "        mov     $0, %rsi" if !is_nil_terminated
 
       @children.reverse.each_with_index do |child, index|
-        vm.push("%rsi")
-        child.codegen(vm)
-        vm.pop("%rsi")
+        if !is_nil_terminated or index > 0
+          vm.push("%rsi")
+          child.codegen(vm)
+          vm.pop("%rsi")
 
-        vm.asm "        mov     %rax, %rdi"
-        vm.with_aligned_stack do
-          vm.call "make_cons"
+          vm.asm "        mov     %rax, %rdi"
+          vm.with_aligned_stack do
+            vm.call "make_cons"
+          end
+        else
+          child.codegen(vm)
         end
 
         unless index == @children.size - 1
@@ -735,16 +831,68 @@ module AST
 
       vm.fnstart
 
-      params.each_with_index do |param, i|
-        varname = vm.addvarname(param)
-        offset = 32 + (i * 8)
+      if is_vararg
+        # Start by the gathering up the last argument. The steps are as
+        # follows:
+        #
+        # 1. Take the number of arguments passed to this lambda and subtract
+        #    the number of non-vararg arguments.
+        #
+        # 2. Use gather_varargs to put all the varargs (which are at the "top"
+        #    of the stack after accounting for return pointers, etc.) into
+        #    %rax.
+        #
+        # 3. Add the resulting list to the frame.
+        #
+        # 4. Restore the number of arguments in %rsi by adding back in the
+        #    number of non-vararg arguments (this has to be done a little later
+        #    actually, because we still need the number gathered arguments).
+        rest_varname = vm.addvarname(rest_param)
+
+        vm.asm "        sub     $#{params.size}, %rsi"
+
+        vm.with_aligned_stack do
+          vm.call "gather_varargs"
+        end
+
+        vm.push("%rsi")
 
         vm.argframe
-        vm.movlabelreg varname, "%rsi"
-        vm.asm "        mov     #{offset}(%rsp), %rdx"
+        vm.movlabelreg rest_varname, "%rsi"
+        vm.asm "        mov     %rax, %rdx"
         vm.with_aligned_stack do
           vm.call "add_to_frame"
         end
+
+        vm.pop("%rsi")
+      end
+
+      # Now set up the pointer to the first non-vararg argument:
+      vm.asm "        mov     %rsp, %r8"
+      vm.asm "        add     $32, %r8"
+
+      if is_vararg
+        vm.asm "        mov     %rsi, %rax"
+        vm.asm "        shlq    $3, %rax"   # multiply by 8
+        vm.asm "        add     %rax, %r8"
+
+        # Now we can actually restore the number of total arguments passed to
+        # the lambda, should be we need it again.
+        vm.asm "        add     $#{params.size}, %rsi"
+      end
+
+      params.reverse.each do |param|
+        varname = vm.addvarname(param)
+
+        vm.argframe
+        vm.movlabelreg varname, "%rsi"
+        vm.asm "        mov     (%r8), %rdx"
+        vm.push("%r8")
+        vm.with_aligned_stack do
+          vm.call "add_to_frame"
+        end
+        vm.pop("%r8")
+        vm.asm "        add     $8, %r8"
       end
 
       body_statements.each do |statement|
@@ -782,7 +930,7 @@ module AST
       filtered_args = @args.reject { |arg| arg.is_a?(Comment) }
 
       vm.with_aligned_stack(filtered_args.size) do
-        filtered_args.reverse.each do |arg|
+        filtered_args.each do |arg|
           arg.codegen(vm)
           vm.push("%rax")
         end
