@@ -11,7 +11,7 @@ class Scheme < Parslet::Parser
   rule(:space)     { match('\s').repeat(1) }
   rule(:space?)    { space.maybe }
 
-  rule(:int)       { match('[0-9]').repeat(1).as(:int) }
+  rule(:int)       { (match('[+-]').maybe >> match('[0-9]').repeat(1)).as(:int) }
   rule(:bool)      { str('#t').as(:true) | str('#f').as(:false) }
 
   rule(:simplevar) {

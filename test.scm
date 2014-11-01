@@ -62,6 +62,22 @@
 
 (newline)
 
+;; Numerical values
+
+(display  2) (newline) ; a positive number
+(display +2) (newline) ; a positive number with a plus sign
+(display -2) (newline) ; a negative number (even)
+(display -1) (newline) ; a negative number (odd)
+(display (+ 3 -3)) (newline)
+(display (+ 9 -3)) (newline)
+(display (+ 3 -9)) (newline)
+(display (* 2 -3)) (newline)
+(display (* 2 -3 4)) (newline)
+(display (* 2 -3 4 -5)) (newline)
+(display (* -1 -3 -5)) (newline)
+
+(newline)
+
 ;; Quoted values
 
 (display 'a) (newline)

@@ -27,6 +27,8 @@ scm_value_t stdlib_impl_nullp(scm_value_t value);
 scm_value_t stdlib_impl_display(scm_value_t value);
 scm_value_t stdlib_impl_newline();
 
+int64_t value_to_native_int(scm_value_t value);
+
 /** ENVIRONMENT FRAMES ********************************************************/
 
 struct frame_t {
@@ -276,7 +278,7 @@ scm_value_t stdlib_impl_mul(scm_value_t vals) {
 
     while (valslist != NIL_VALUE) {
         scm_value_t val = valslist->car;
-        prod *= ((int64_t) val) >> 1;
+        prod *= value_to_native_int(val);
         valslist = valslist->cdr;
     }
 
@@ -312,7 +314,7 @@ scm_value_t stdlib_impl_display(scm_value_t value) {
     } else if (value_is_false(value)) {
         printf("#f");
     } else if (value_is_fixnum(value)) {
-        printf("%" PRId64, ((int64_t) value) >> 1);
+        printf("%" PRId64, value_to_native_int(value));
     } else if (value_is_string(value)) {
         printf("%s", ((struct scm_string *) value)->contents);
     } else if (value_is_lambda(value)) {

@@ -20,6 +20,8 @@
          .global cdecl(stdlib_display)
          .global cdecl(stdlib_newline)
 
+         .global cdecl(value_to_native_int)
+
          .text
 
 cdecl(scm_fncall):
@@ -146,4 +148,19 @@ cdecl(stdlib_newline):
         sub     $8, %rsp
         call    cdecl(stdlib_impl_newline)
         add     $8, %rsp
+        ret
+
+cdecl(value_to_native_int):
+        # A tagged integer is specified by shifting it to the left by one bit,
+        # then filling in the least significant bit with "1". When converting
+        # back to a native integer, however, it is important that we do an
+        # arithmetic right shift. That is, if the tagged value is negative (the
+        # most significant bit is "1"), then the native integer should be
+        # negative as well.
+        #
+        # According to http://stackoverflow.com/a/1857965, the bit shift
+        # operator in C is not required to be an arithmetic shift, so to be
+        # careful, we should force an arithmetic shift.
+        sarq    $1, %rdi
+        mov     %rdi, %rax
         ret
