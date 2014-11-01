@@ -41,6 +41,8 @@
 (define (compose f g)
   (lambda (x) (f (g x))) )
 
+(define (list . x) x)
+
 (display "[stdlib-test] ")
 (display (length '(1 2 3))) (newline)
 
@@ -52,4 +54,5 @@
   reject
   foreach
   identity
-  compose)
+  compose
+  list)

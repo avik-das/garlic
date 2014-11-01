@@ -990,7 +990,7 @@ module VM
       @quotedatoms = {}
       @stringnames = {}
 
-      @frame_offsets = [8]
+      @frame_offsets = [0]
 
       # counters
       @currfn = 0
@@ -1065,24 +1065,22 @@ module VM
       asm "        ret"
       asm "#{main_name}_do_init:"
       asm "        movreglabel($1, #{@symbol_prefix}_is_initialized)"
-      asm "        sub     $8, %rsp"
+      push
       asm "        call    #{@symbol_prefix}_create_atoms"
       call "new_root_frame"
       asm "        movreglabel(%rax, #{@symbol_prefix}_root_frame)"
-      asm "        push    %rax"
+      pop
+      push("%rax")
 
       asm ""
-      asm "        sub     $8, %rsp"
-      asm "        # module imports"
       @module_requires.each do |name|
         call "init_#{VM.symbol_prefix_from_module_name(name)}"
       end
-      asm "        add     $8, %rsp"
     end
 
     def epilogue
       asm ""
-      asm "        add     $16, %rsp"
+      asm "        add     $8, %rsp"
       asm "        mov     $0, %rax"
       asm "        ret"
       asm ""
@@ -1238,7 +1236,7 @@ module VM
     end
 
     def argframe
-      offset = lstoffset
+      offset = lstoffset - 8
       if offset > 0
         asm "        mov     #{offset}(%rsp), %rdi"
       else
@@ -1256,21 +1254,20 @@ module VM
       # address. One option might be to separate the stack frame offset from
       # the environment frame offset so vm.argframe can continue to work
       # independently of the stack alignment.
+      @frame_offsets.push(0)
+
       asm "        mov     8(%rsp), %rax"
       push("%rax")
-
-      @frame_offsets.push(8)
     end
 
     def fnend
-      @frame_offsets.pop
-
       # Remove the duplicated current frame pointer.
       pop
+      @frame_offsets.pop
     end
 
     def lstoffset
-      @frame_offsets.last - 8
+      @frame_offsets.last
     end
 
     def call(fnname)

@@ -227,12 +227,15 @@
 (display (* 2 3 4)) (newline)
 (display (* 2 3 4 5)) (newline)
 
-; NOTE: varargs don't quite work yet. However, the following is present to show
-; what the goal is. The infrastructure is being built out. Note that improper
-; cons lists, which are syntactically similar to the argument lists of variadic
-; functions, do work.
+(newline)
 
-; (newline)
-;
-; (define (varargs x y . z) (cons (+ x y) z))
-; (display (varargs 1 2 3 4 5))
+(define (varargs x y . z) (cons (+ x y) z))
+(display (varargs 1 2 3 4 5)) (newline)
+
+(newline)
+
+(display (stdlib:list 'a 'b 'c 'd)) (newline)
+(display-helpers:display-all-with-tag "INFO"
+                                      "1st message"
+                                      "2nd message"
+                                      "3rd message")
