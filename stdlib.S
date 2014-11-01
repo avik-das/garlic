@@ -70,12 +70,12 @@ gather_varargs_begin:                   #   so save the original value too
         je      gather_varargs_done     # otherwise we're done
 
         mov     (%r9), %rdi             # grab the next argument
-        push    %r8                     # save the number of arguments
+        push    %r8                     # save the number of arguments left
         push    %r9                     #   and the pseudo-stack pointer
-        sub     $8, %rsp                # align the stack
+        push    %r10                    #   and the total number of arguments
         call    cdecl(make_cons)
-        add     $8, %rsp                # unalign the stack
         mov     %rax, %rsi              # the cons is the next item in the list
+        pop     %r10
         pop     %r9
         pop     %r8
         add     $8, %r9                 # advance to the next argument
