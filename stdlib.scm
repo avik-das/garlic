@@ -24,6 +24,14 @@
 (define (reject f ls)
         (filter (lambda (x) (not (f x))) ls) )
 
+(define (reduce f zero ls)
+        (if (null? ls)
+            zero
+            (reduce f (f zero (car ls)) (cdr ls)) ) )
+
+(define (sum ls)
+        (reduce + 0 ls))
+
 (define (foreach f ls)
         (if (null? ls)
             '()
@@ -52,6 +60,8 @@
   map
   filter
   reject
+  reduce
+  sum
   foreach
   identity
   compose

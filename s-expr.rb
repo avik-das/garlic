@@ -524,23 +524,29 @@ module AST
             "(#{@children.join(" ")})")
       end
 
-      unless @children[1].has_children?
+      unless @children[1].is_a?(Var) or @children[1].has_children?
         raise ParseException.new(
-          "Lambda parameter list must be a list, got: " +
+          "Lambda parameter list must be a var or list, got: " +
             "#{@children[1]} of type #{@children[1].class}")
       end
 
-      @children[1].children.each do |param|
-        unless param.is_a?(Var)
-          raise ParseException.new(
-            "Lambda parameter must be a var, got: " +
-              "#{param} of type #{param.class}")
+      if @children[1].has_children?
+        @children[1].children.each do |param|
+          unless param.is_a?(Var)
+            raise ParseException.new(
+              "Lambda parameter must be a var, got: " +
+                "#{param} of type #{param.class}")
+          end
         end
       end
 
       if @children[1].is_a?(DottedList)
         @params = @children[1].children.take(@children[1].children.size - 1)
         @rest_param = @children[1].children.last
+        @is_vararg = true
+      elsif @children[1].is_a?(Var)
+        @params = []
+        @rest_param = @children[1]
         @is_vararg = true
       else
         @params = @children[1].children
