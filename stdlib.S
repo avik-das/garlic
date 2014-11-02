@@ -10,6 +10,7 @@
 # stdlib functions
 
          .global cdecl(stdlib_sum)
+         .global cdecl(stdlib_difference)
          .global cdecl(stdlib_mul)
 
          .global cdecl(stdlib_cons)
@@ -94,6 +95,15 @@ cdecl(stdlib_sum):
         call    cdecl(gather_varargs)
         mov     %rax, %rdi
         call    cdecl(stdlib_impl_sum)
+        add     $8, %rsp
+        ret
+
+cdecl(stdlib_difference):
+        # ignore the pushed frame
+        sub     $8, %rsp
+        call    cdecl(gather_varargs)
+        mov     %rax, %rdi
+        call    cdecl(stdlib_impl_difference)
         add     $8, %rsp
         ret
 

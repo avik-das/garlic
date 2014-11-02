@@ -10,8 +10,9 @@
 
 typedef void * scm_value_t;
 
-scm_value_t stdlib_sum(scm_value_t a_val, scm_value_t b_val);
-scm_value_t stdlib_mul(scm_value_t a_val, scm_value_t b_val);
+scm_value_t stdlib_sum(scm_value_t vals);
+scm_value_t stdlib_difference(scm_value_t vals);
+scm_value_t stdlib_mul(scm_value_t vals);
 
 scm_value_t stdlib_cons(scm_value_t car_val, scm_value_t cdr_val);
 scm_value_t stdlib_car(scm_value_t cons_val);
@@ -22,6 +23,7 @@ scm_value_t stdlib_display(scm_value_t value);
 scm_value_t stdlib_newline();
 
 scm_value_t stdlib_impl_sum(scm_value_t vals);
+scm_value_t stdlib_impl_difference(scm_value_t vals);
 scm_value_t stdlib_impl_mul(scm_value_t vals);
 scm_value_t stdlib_impl_nullp(scm_value_t value);
 scm_value_t stdlib_impl_display(scm_value_t value);
@@ -75,6 +77,7 @@ struct frame_t * new_root_frame() {
     struct frame_t *frame = new_frame();
 
     add_to_frame(frame, "+", make_fn(frame, stdlib_sum));
+    add_to_frame(frame, "-", make_fn(frame, stdlib_difference));
     add_to_frame(frame, "*", make_fn(frame, stdlib_mul));
 
     add_to_frame(frame, "cons", make_fn(frame, stdlib_cons));
@@ -269,6 +272,37 @@ scm_value_t stdlib_impl_sum(scm_value_t vals) {
     }
 
     return (scm_value_t) (sum | 1);
+}
+
+scm_value_t stdlib_impl_difference(scm_value_t vals) {
+    struct scm_cons *valslist = (struct scm_cons *) vals;
+
+    if (valslist == NIL_VALUE) {
+        printf("ERROR: - called with two few arguments");
+        exit(1);
+    }
+
+    // If only one argument is passed in, then return that number negated.
+
+    if (valslist->cdr == NIL_VALUE) {
+        int64_t raw_num = ((int64_t) valslist->car) ^ 1;
+        int64_t neg_num = 0 - raw_num;
+        return (scm_value_t) (neg_num | 1);
+    }
+
+    // Otherwise, return the first number minus the sum of the rest of the
+    // numbers.
+
+    int64_t difference = ((int64_t) valslist->car) ^ 1;
+    valslist = valslist->cdr;
+
+    while (valslist != NIL_VALUE) {
+        scm_value_t val = valslist->car;
+        difference -= ((int64_t) val) ^ 1;
+        valslist = valslist->cdr;
+    }
+
+    return (scm_value_t) (difference | 1);
 }
 
 scm_value_t stdlib_impl_mul(scm_value_t vals) {
