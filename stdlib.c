@@ -18,6 +18,7 @@ scm_value_t stdlib_cons(scm_value_t car_val, scm_value_t cdr_val);
 scm_value_t stdlib_car(scm_value_t cons_val);
 scm_value_t stdlib_cdr(scm_value_t cons_val);
 scm_value_t stdlib_nullp(scm_value_t value);
+scm_value_t stdlib_equal_sign(scm_value_t vals);
 
 scm_value_t stdlib_display(scm_value_t value);
 scm_value_t stdlib_newline();
@@ -26,6 +27,7 @@ scm_value_t stdlib_impl_sum(scm_value_t vals);
 scm_value_t stdlib_impl_difference(scm_value_t vals);
 scm_value_t stdlib_impl_mul(scm_value_t vals);
 scm_value_t stdlib_impl_nullp(scm_value_t value);
+scm_value_t stdlib_impl_equal_sign(scm_value_t vals);
 scm_value_t stdlib_impl_display(scm_value_t value);
 scm_value_t stdlib_impl_newline();
 
@@ -84,6 +86,7 @@ struct frame_t * new_root_frame() {
     add_to_frame(frame, "car", make_fn(frame, stdlib_car));
     add_to_frame(frame, "cdr", make_fn(frame, stdlib_cdr));
     add_to_frame(frame, "null?", make_fn(frame, stdlib_nullp));
+    add_to_frame(frame, "=", make_fn(frame, stdlib_equal_sign));
 
     add_to_frame(frame, "display", make_fn(frame, stdlib_display));
     add_to_frame(frame, "newline", make_fn(frame, stdlib_newline));
@@ -278,7 +281,7 @@ scm_value_t stdlib_impl_difference(scm_value_t vals) {
     struct scm_cons *valslist = (struct scm_cons *) vals;
 
     if (valslist == NIL_VALUE) {
-        printf("ERROR: - called with two few arguments");
+        printf("ERROR: - called with too few arguments");
         exit(1);
     }
 
@@ -323,6 +326,43 @@ scm_value_t stdlib_impl_nullp(scm_value_t value) {
     return value == NIL_VALUE ?
         (scm_value_t) TRUE_VALUE :
         (scm_value_t) FALSE_VALUE;
+}
+
+scm_value_t stdlib_impl_equal_sign(scm_value_t vals) {
+    struct scm_cons *valslist = (struct scm_cons *) vals;
+    struct scm_cons *item;
+
+    // There must be at least two items to check.
+    if (valslist == NIL_VALUE ||
+            valslist->cdr == NIL_VALUE) {
+        printf("ERROR: = called with too few arguments; at least two expected");
+        exit(1);
+    }
+
+    // All the items must be numbers.
+    item = valslist;
+    while (item != NIL_VALUE) {
+        if (!value_is_fixnum(item->car)) {
+            printf("ERROR: = can only compare numbers");
+            exit(1);
+        }
+
+        item = item->cdr;
+    }
+
+    // All the items must be equal to the first item.
+    int64_t first_value = (int64_t) valslist->car;
+    item = valslist->cdr;
+    while (item != NIL_VALUE) {
+        int64_t item_value = (int64_t) item->car;
+        if (item_value != first_value) {
+            return (scm_value_t) FALSE_VALUE;
+        }
+
+        item = item->cdr;
+    }
+
+    return (scm_value_t) TRUE_VALUE;
 }
 
 void display_cons_inner(struct scm_cons *cons) {

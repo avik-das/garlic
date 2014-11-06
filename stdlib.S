@@ -17,6 +17,7 @@
          .global cdecl(stdlib_car)
          .global cdecl(stdlib_cdr)
          .global cdecl(stdlib_nullp)
+         .global cdecl(stdlib_equal_sign)
 
          .global cdecl(stdlib_display)
          .global cdecl(stdlib_newline)
@@ -142,6 +143,15 @@ cdecl(stdlib_nullp):
         mov     24(%rsp), %rdi
         sub     $8, %rsp
         call    cdecl(stdlib_impl_nullp)
+        add     $8, %rsp
+        ret
+
+cdecl(stdlib_equal_sign):
+        # ignore the pushed frame
+        sub     $8, %rsp
+        call    cdecl(gather_varargs)
+        mov     %rax, %rdi
+        call    cdecl(stdlib_impl_equal_sign)
         add     $8, %rsp
         ret
 

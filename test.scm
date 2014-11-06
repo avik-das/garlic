@@ -132,6 +132,31 @@
 (display (if (not #t) 'wrong 'correct)) (newline)
 (display (if (not 0) 'wrong 'correct)) (newline)
 (display (if (not 1) 'wrong 'correct)) (newline)
+(display (= 1 1)) (newline)
+(display (= 2 2 (+ 1 1))) (newline)
+(display (not (= 1 2))) (newline)
+(display (not (= 1 1 2))) (newline)
+
+(newline)
+
+; TODO: This will soon become a cond expression
+
+(define (fib n)
+  (if (= n 0) 1
+    (if (= n 1) 1
+      (+ (fib (- n 1)) (fib (- n 2))) )))
+
+(display (fib 0)) (newline)
+(display (fib 1)) (newline)
+(display (fib 2)) (newline)
+(display (fib 3)) (newline)
+(display (fib 4)) (newline)
+(display (fib 5)) (newline)
+(display (fib 6)) (newline)
+(display (fib 7)) (newline)
+(display (fib 8)) (newline)
+(display (fib 9)) (newline)
+(display (fib 10)) (newline)
 
 (newline)
 

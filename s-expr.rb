@@ -15,8 +15,8 @@ class Scheme < Parslet::Parser
   rule(:bool)      { str('#t').as(:true) | str('#f').as(:false) }
 
   rule(:simplevar) {
-    match('[A-Za-z\-\+\*\/_]') >>
-      match('[A-Za-z\-\+\*\/_\?0-9]').repeat(1).maybe
+    match('[A-Za-z\-\+\*\/_=]') >>
+      match('[A-Za-z\-\+\*\/_\?0-9=]').repeat(1).maybe
   }
 
   rule(:var)       {
