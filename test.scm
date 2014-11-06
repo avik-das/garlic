@@ -139,12 +139,12 @@
 
 (newline)
 
-; TODO: This will soon become a cond expression
+; Cond expressions
 
 (define (fib n)
-  (if (= n 0) 1
-    (if (= n 1) 1
-      (+ (fib (- n 1)) (fib (- n 2))) )))
+  (cond ((= n 0) 1)
+        ((= n 1) 1)
+        (else (+ (fib (- n 1)) (fib (- n 2)) )) ))
 
 (display (fib 0)) (newline)
 (display (fib 1)) (newline)
@@ -157,6 +157,17 @@
 (display (fib 8)) (newline)
 (display (fib 9)) (newline)
 (display (fib 10)) (newline)
+
+(newline)
+
+(define (check-1-2-3 n)
+  (cond ((= n 1) 'one)
+        ((= n 2) 'two)
+        ((= n 3) 'three)) )
+
+(display (check-1-2-3 1)) (newline)
+(display (check-1-2-3 2)) (newline)
+(display (check-1-2-3 3)) (newline)
 
 (newline)
 

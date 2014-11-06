@@ -346,6 +346,8 @@ module AST
               Lambda.new(*filtered_children)
             when :if
               If.new(*filtered_children)
+            when :cond
+              Cond.new(*filtered_children)
             else
               as_function_call
             end
@@ -633,6 +635,75 @@ module AST
     end
 
     attr :cond, :true_expr, :false_expr, :children
+  end
+
+  class Cond < SpecializedNode
+    def initialize(*children)
+      @children = children
+    end
+
+    def static_transformed
+      unless @children.size >= 2
+        raise ParseException.new(
+          "Cond must have at least two children, got #{@children.size}: " +
+            "(#{@children.join(" ")})")
+      end
+
+      conditions = @children.drop(1)
+      @conditions = conditions.each_with_index.map { |cond, index|
+        unless cond.is_a?(NestedNode)
+          raise ParseException.new(
+            "Condition in Cond expression must be a list, got: #{cond}")
+        end
+
+        cond_children = cond.children.reject { |child| child.is_a?(Comment) }
+
+        unless cond_children.size >= 2
+          raise ParseException.new(
+            "Condition in Cond expression must be have a test " +
+              "and at least one expression, got: #{cond_children}")
+        end
+
+        test = cond_children[0]
+        expressions = cond_children
+          .drop(1)
+          .map(&:static_transformed)
+        if test.is_a?(Var) && test.name == :else
+          unless index == conditions.size - 1
+            raise ParseException.new(
+              "Else condition must be be last condition")
+          end
+
+          CondElse.new(expressions)
+        else
+          CondCondition.new(
+            test.static_transformed,
+            expressions
+          )
+        end
+      }
+
+      self
+    end
+
+    attr :conditions
+  end
+
+  class CondCondition < SpecializedNode
+    def initialize(test, expressions)
+      @test = test
+      @expressions = expressions
+    end
+
+    attr :test, :expressions
+  end
+
+  class CondElse < SpecializedNode
+    def initialize(expressions)
+      @expressions = expressions
+    end
+
+    attr :expressions
   end
 
   class ASTTransform < Parslet::Transform
@@ -970,6 +1041,51 @@ module AST
       @false_expr.codegen(vm)
 
       vm.asm "#{label}_end:"
+    end
+  end
+
+  class Cond < SpecializedNode
+    def codegen(vm)
+      label = vm.gencondname
+
+      condition_labels = @conditions.each_with_index.map { |cond, index|
+        if cond.is_a?(CondCondition)
+          if index.zero?
+            "#{label}_begin"
+          else
+            "#{label}_#{index}"
+          end
+        elsif cond.is_a?(CondElse)
+          "#{label}_else"
+        end
+      }
+
+      condition_labels.push("#{label}_end")
+
+      @conditions.each_with_index do |cond, index|
+        vm.asm "#{condition_labels[index]}:"
+
+        if cond.is_a?(CondCondition)
+          cond.test.codegen(vm)
+
+          vm.asm "        cmp     $4, %rax"
+          vm.asm "        je      #{condition_labels[index + 1]}"
+
+          cond.expressions.each do |exp|
+            exp.codegen(vm)
+          end
+
+          if index != @conditions.size - 1
+            vm.asm "        jmp     #{condition_labels.last}"
+          end
+        elsif cond.is_a?(CondElse)
+          cond.expressions.each do |exp|
+            exp.codegen(vm)
+          end
+        end
+      end
+
+      vm.asm "#{condition_labels.last}:"
     end
   end
 end
