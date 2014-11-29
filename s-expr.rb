@@ -125,7 +125,17 @@ module AST
 
     def gathered_requires(module_exports)
       module_exports.map { |exp|
-        exp.children[1].name
+        name = exp.children[1]
+
+        if name.is_a?(Var)
+          basedir = compiler_dir
+          absolute_path_for_module(name.name.to_s, basedir)
+        elsif name.is_a?(String)
+          basedir = File.dirname(self.filename)
+          absolute_path_for_module(name.contents, basedir)
+        else
+          raise ParseException.new("require with invalid name: #{name}")
+        end
       }.flatten
     end
 
@@ -143,6 +153,7 @@ module AST
     end
 
     attr :statements
+    attr_accessor :filename
   end
 
   class Node
@@ -722,8 +733,9 @@ module AST
     rule(exprs: sequence(:x)) { Program.new(*x) }
   end
 
-  def AST.construct_from_parse_tree(tree)
+  def AST.construct_from_parse_tree(tree, filename)
     ast = ASTTransform.new.apply(tree)
+    ast.filename = filename
     ast = ast.static_transformed
   end
 end
@@ -1226,7 +1238,8 @@ module VM
         # TODO: error checking
         internal_label = @varnames[name.to_s]
 
-        getter_name = VM.getter_name_for_exported_symbol(@module_name, name)
+        module_name = File.basename(@module_name)
+        getter_name = VM.getter_name_for_exported_symbol(module_name, name)
 
         asm "        .global cdecl(#{getter_name})"
         asm "cdecl(#{getter_name}):"
@@ -1274,7 +1287,8 @@ module VM
     def commit
       epilogue
 
-      File.open(@filename, 'w') do |f|
+      output_filename = VM.output_filename(@module_name)
+      File.open(output_filename, 'w') do |f|
         f.puts(@statements.join("\n"))
       end
     end
@@ -1449,9 +1463,11 @@ module VM
     end
 
     def self.symbol_prefix_from_module_name(module_name)
-      normalized_name = normalized_name_for_name(module_name)
+      "m_#{Digest::MD5.hexdigest(module_name.to_s)}"
+    end
 
-      "#{normalized_name}_#{Digest::MD5.hexdigest(module_name.to_s)}"
+    def self.output_filename(module_name)
+      "build/#{self.symbol_prefix_from_module_name(module_name)}.S"
     end
 
   end
@@ -1477,13 +1493,21 @@ end
 def compile_file(filename, symbol_prefix, is_main)
   file = File.read(filename)
   parsed = Scheme.new.parse(file)
-  ast = AST.construct_from_parse_tree(parsed)
+  ast = AST.construct_from_parse_tree(parsed, filename)
 
-  ast.codegen("#{BUILD_DIR}/#{filename}.S", symbol_prefix, is_main)
+  ast.codegen(filename, symbol_prefix, is_main)
 end
 
 def run_gcc(out_filename)
-  system "gcc -g build/*.scm.S stdlib.c stdlib.S hashmap.c -o #{out_filename}"
+  system "gcc -g build/*.S stdlib.c stdlib.S hashmap.c -o #{out_filename}"
+end
+
+def compiler_dir
+  File.dirname(__FILE__)
+end
+
+def absolute_path_for_module(relative_path, basedir = nil)
+  File.absolute_path(relative_path, basedir)
 end
 
 ## MAIN ########################################################################
@@ -1491,7 +1515,7 @@ end
 # TODO: check arguments (possibly read from stdin)
 
 create_fresh_build_env(OUT_EXE, BUILD_DIR)
-compile_file(ARGV[0], 'main', true)
+compile_file(absolute_path_for_module(ARGV[0]), 'main', true)
 run_gcc(OUT_EXE)
 
 # vim: ts=2 sw=2 :
