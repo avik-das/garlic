@@ -15,3 +15,10 @@ bundle install
 ./s-expr.rb test.scm
 ./main
 ```
+
+Running the tests
+-----------------
+
+```sh
+./run-tests.sh
+```
