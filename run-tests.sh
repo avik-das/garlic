@@ -1,5 +1,7 @@
 #!/bin/sh
 
+failed=0
+
 function cleanup {
     rm -f test/tmp.result
     rm -f test/tmp.diff
@@ -10,7 +12,7 @@ clr_eol=`tput el`
 function log_info_clearable {
     msg=$1
     # Don't output a newline since the line is meant to be cleared.
-   printf "\033[1;32m$msg\033[0m"
+    printf "\033[1;32m$msg\033[0m"
 }
 
 function clear_line {
@@ -22,12 +24,16 @@ function log_info {
     printf "\033[1;32m$msg\033[0m\n"
 }
 
-function fail {
+function log_error {
     msg=$1
     printf "\033[1;31m$msg\033[0m\n"
+}
 
-    cleanup
-    exit 1
+function fail {
+    msg=$1
+    log_error "$msg"
+
+    failed=`expr $failed + 1`
 }
 
 rm -f test/tmp
@@ -42,26 +48,38 @@ echo
 for testfile in test/success/*.scm; do
     log_info_clearable "Running \"$testfile\"..."
 
-    ./s-expr.rb "$testfile"
+    ./s-expr.rb "$testfile" > test/tmp.result 2>&1
 
     if [ $? -ne 0 ]; then
         echo
+        echo
+        cat test/tmp.result
+
         fail "Compiling \"$testfile\" failed"
+        echo
+        continue
     fi
 
     ./main > test/tmp.result
 
     if [ $? -ne 0 ]; then
         echo
+        echo
+        cat test/tmp.result
+
         fail "Running \"$testfile\" failed"
+        echo
+        continue
     fi
 
     diff test/tmp.result "${testfile}.result" > test/tmp.diff
 
     if [ $? -ne 0 ]; then
         echo
+        echo
         cat test/tmp.diff
         fail "Unexpected output running $testfile"
+        echo
     fi
 
     clear_line
@@ -80,6 +98,11 @@ for testfile in test/failure/*.scm; do
     clear_line
 done
 
-log_info "ALL TESTS SUCCEEDED"
+if [ $failed -eq 0 ]; then
+    log_info "ALL TESTS SUCCEEDED"
+else
+    echo
+    log_error "$failed TESTS FAILED"
+fi
 
 cleanup
