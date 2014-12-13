@@ -359,6 +359,8 @@ module AST
               If.new(*filtered_children)
             when :cond
               Cond.new(*filtered_children)
+            when :let
+              Let.new(*filtered_children)
             else
               as_function_call
             end
@@ -715,6 +717,66 @@ module AST
     end
 
     attr :expressions
+  end
+
+  class Let < SpecializedNode
+    include CommonTransformations
+
+    def initialize(*children)
+      @children = children
+    end
+
+    def static_transformed
+      unless @children.size >= 3
+        raise ParseException.new(
+          "Let must have at least three children, got #{@children.size}: " +
+            "(#{@children.join(" ")})")
+      end
+
+      unless @children[1].is_a?(NestedNode)
+        raise ParseException.new(
+          "Let bindings must be a list, got: (#{@children[1]})")
+      end
+
+      @bindings = @children[1].children.map { |binding|
+        unless binding.is_a?(NestedNode)
+          raise ParseException.new(
+            "Let binding must be a list, got: (#{binding})")
+        end
+
+        unless binding.children.size == 2
+          raise ParseException.new(
+            "Let binding must have two children, got " +
+              "#{binding.children.size}: (#{binding.children.join(" ")})")
+        end
+
+        unless binding.children[0].is_a?(Var)
+          raise ParseException.new(
+            "Let binding must bind to a variable, got: " +
+              "(#{binding.children[0]})")
+        end
+
+        name = binding.children[0]
+        value = binding.children[1].static_transformed
+        LetBinding.new(name, value)
+      }
+
+      @expressions = @children.drop(2).map(&:static_transformed)
+      @expressions = with_hoisted_definitions(@expressions)
+
+      self
+    end
+
+    attr :bindings, :expressions
+  end
+
+  class LetBinding < SpecializedNode
+    def initialize(name, value)
+      @name = name
+      @value = value
+    end
+
+    attr :name, :value
   end
 
   class ASTTransform < Parslet::Transform
@@ -1100,6 +1162,46 @@ module AST
       vm.asm "#{condition_labels.last}:"
     end
   end
+
+  class Let < SpecializedNode
+    def codegen(vm)
+      vm.argframe
+      vm.with_aligned_stack do
+        vm.call "new_frame_with_parent"
+      end
+
+      # Note that we *won't* be pushing a return address. with_aligned_stack
+      # assumes that we will, so after that fictitious return address is
+      # pushed, we want to end up back at the same point we are at now.
+      vm.with_aligned_stack(-1) do
+        vm.newframe
+        vm.push("%rax")
+
+        bindings.each do |binding|
+          binding.value.codegen(vm)
+          vm.push("%rax")
+        end
+
+        bindings.reverse.each do |binding|
+          varname = vm.addvarname(binding.name)
+
+          vm.argframe
+          vm.movlabelreg varname, "%rsi"
+          vm.pop("%rdx")
+          vm.with_aligned_stack do
+            vm.call "add_to_frame"
+          end
+        end
+
+        expressions.each do |expression|
+          expression.codegen(vm)
+        end
+
+        vm.pop
+        vm.remframe
+      end
+    end
+  end
 end
 
 module VM
@@ -1380,6 +1482,14 @@ module VM
       end
     end
 
+    def newframe
+      @frame_offsets.push(0)
+    end
+
+    def remframe
+      @frame_offsets.pop
+    end
+
     def fnstart
       # The current frame is there on the stack, right before the return
       # address, but it's useful to have it available right at the top of the
@@ -1390,7 +1500,7 @@ module VM
       # address. One option might be to separate the stack frame offset from
       # the environment frame offset so vm.argframe can continue to work
       # independently of the stack alignment.
-      @frame_offsets.push(0)
+      newframe
 
       asm "        mov     8(%rsp), %rax"
       push("%rax")
@@ -1399,7 +1509,7 @@ module VM
     def fnend
       # Remove the duplicated current frame pointer.
       pop
-      @frame_offsets.pop
+      remframe
     end
 
     def lstoffset

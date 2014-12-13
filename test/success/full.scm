@@ -303,3 +303,27 @@
 ; arguments is a little different: you have to specify the entire argument list
 ; as a single variable, not a list.
 (display ((lambda ls (stdlib:sum ls)) 1 2 3)) (newline)
+
+(newline)
+
+;; Let bindings
+
+(define let-shadowed 4)
+
+(display
+  (let ((let-shadowed 1)
+        (b 2))
+    (+ let-shadowed b))) (newline)
+
+(display let-shadowed) (newline)
+
+; Again, we hoist definitions inside the let body, as well as multiple
+; statements.
+
+(let ((hello "hello"))
+      (display hello)
+      (display " ")
+      (display world)
+      (newline)
+
+      (define world "world"))
