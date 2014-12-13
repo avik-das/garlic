@@ -360,7 +360,9 @@ module AST
             when :cond
               Cond.new(*filtered_children)
             when :let
-              Let.new(*filtered_children)
+              Let.new(:bare, *filtered_children)
+            when :'let*'
+              Let.new(:star, *filtered_children)
             else
               as_function_call
             end
@@ -722,7 +724,8 @@ module AST
   class Let < SpecializedNode
     include CommonTransformations
 
-    def initialize(*children)
+    def initialize(let_type, *children)
+      @let_type = let_type
       @children = children
     end
 
@@ -767,7 +770,7 @@ module AST
       self
     end
 
-    attr :bindings, :expressions
+    attr :let_type, :bindings, :expressions
   end
 
   class LetBinding < SpecializedNode
@@ -1177,20 +1180,9 @@ module AST
         vm.newframe
         vm.push("%rax")
 
-        bindings.each do |binding|
-          binding.value.codegen(vm)
-          vm.push("%rax")
-        end
-
-        bindings.reverse.each do |binding|
-          varname = vm.addvarname(binding.name)
-
-          vm.argframe
-          vm.movlabelreg varname, "%rsi"
-          vm.pop("%rdx")
-          vm.with_aligned_stack do
-            vm.call "add_to_frame"
-          end
+        case let_type
+        when :bare then add_bindings_bare(vm)
+        when :star then add_bindings_star(vm)
         end
 
         expressions.each do |expression|
@@ -1199,6 +1191,39 @@ module AST
 
         vm.pop
         vm.remframe
+      end
+    end
+
+    def add_bindings_bare(vm)
+      bindings.each do |binding|
+        binding.value.codegen(vm)
+        vm.push("%rax")
+      end
+
+      bindings.reverse.each do |binding|
+        varname = vm.addvarname(binding.name)
+
+        vm.argframe
+        vm.movlabelreg varname, "%rsi"
+        vm.pop("%rdx")
+        vm.with_aligned_stack do
+          vm.call "add_to_frame"
+        end
+      end
+    end
+
+    def add_bindings_star(vm)
+      bindings.each do |binding|
+        varname = vm.addvarname(binding.name)
+
+        binding.value.codegen(vm)
+
+        vm.argframe
+        vm.movlabelreg varname, "%rsi"
+        vm.asm "        mov     %rax, %rdx"
+        vm.with_aligned_stack do
+          vm.call "add_to_frame"
+        end
       end
     end
   end

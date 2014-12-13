@@ -327,3 +327,28 @@
       (newline)
 
       (define world "world"))
+
+(newline)
+
+(define let*-shadowed-1 4)
+(define let*-shadowed-2 5)
+
+(display
+  (let* ((let*-shadowed-1 1)
+         (b 2)
+         (let*-shadowed-2 (+ let*-shadowed-1 b)))
+    let*-shadowed-2)) (newline)
+
+(display let*-shadowed-1) (newline)
+(display let*-shadowed-2) (newline)
+
+; Again, we hoist definitions inside the let* body, as well as multiple
+; statements.
+
+(let* ((hello "hello"))
+       (display hello)
+       (display " ")
+       (display world)
+       (newline)
+
+       (define world "world"))
