@@ -78,6 +78,33 @@ end
 module AST
   class ParseException < Exception; end
 
+  class SchemeModule
+    MODULE_TYPE_SCM = :scheme
+
+    def initialize(filename,
+                   module_name,
+                   is_main,
+                   module_type,
+                   ast,
+                   child_modules)
+      @filename = filename
+      @module_name = module_name
+      @is_main = is_main
+      @module_type = module_type
+
+      @ast = ast
+      @child_modules = child_modules
+    end
+
+    attr :filename,
+         :module_name,
+         :is_main,
+         :module_type
+
+    attr :ast,
+         :child_modules
+  end
+
   module CommonTransformations
     def with_hoisted_definitions(statements)
       defines = statements.find_all { |s| s.is_a?(Definition) }
@@ -104,6 +131,17 @@ module AST
       @module_exports = gathered_exports(module_exports)
 
       self
+    end
+
+    def recursive_require_modules
+      @module_requires.map { |name|
+        gather_asts(
+          "#{name}.scm",
+          name,
+          false,
+          SchemeModule::MODULE_TYPE_SCM
+        )
+      }.uniq { |m| m.filename }
     end
 
     def separated_module_requires(statements)
@@ -808,6 +846,19 @@ end
 ## NATIVE CODE GENERATION ######################################################
 
 module AST
+  class SchemeModule
+    class CompileException < Exception; end
+
+    def codegen
+      case module_type
+      when MODULE_TYPE_SCM
+        ast.codegen(filename, module_name, is_main)
+      else
+        raise CompileException.new("unknown module type: #{module_type}")
+      end
+    end
+  end
+
   class Program
     def codegen(filename, symbol_prefix, is_main)
       vm = VM::VM.new(
@@ -823,14 +874,6 @@ module AST
       end
 
       vm.commit
-
-      @module_requires.each do |name|
-        compile_file("#{name}.scm", name, false)
-
-        # There is no need to emit a call to initialize the newly compiled
-        # module. This is because all the initialization calls will be made by
-        # the VM as part of the prologue.
-      end
     end
   end
 
@@ -1625,12 +1668,39 @@ def create_fresh_build_env(out_exe_name, build_dir_name)
   FileUtils.mkdir_p(build_dir_name)
 end
 
-def compile_file(filename, symbol_prefix, is_main)
+def compile_file(filename)
+  module_tree = gather_asts(filename, 'main', true)
+
+  # Linearize the dependency DAG
+  to_codegen = []
+  tree_queue = [module_tree]
+  until tree_queue.empty?
+    tree = tree_queue.shift
+    tree_queue += tree.child_modules
+    to_codegen << tree
+  end
+
+  to_codegen.each(&:codegen)
+end
+
+def gather_asts(filename,
+                module_name,
+                is_main,
+                module_type = AST::SchemeModule::MODULE_TYPE_SCM)
   file = File.read(filename)
   parsed = Scheme.new.parse(file)
   ast = AST.construct_from_parse_tree(parsed, filename)
 
-  ast.codegen(filename, symbol_prefix, is_main)
+  child_modules = ast.recursive_require_modules
+
+  AST::SchemeModule.new(
+    filename,
+    module_name,
+    is_main,
+    module_type,
+    ast,
+    child_modules
+  )
 end
 
 def run_gcc(out_filename)
@@ -1650,7 +1720,7 @@ end
 # TODO: check arguments (possibly read from stdin)
 
 create_fresh_build_env(OUT_EXE, BUILD_DIR)
-compile_file(absolute_path_for_module(ARGV[0]), 'main', true)
+compile_file(absolute_path_for_module(ARGV[0]))
 run_gcc(OUT_EXE)
 
 # vim: ts=2 sw=2 :
