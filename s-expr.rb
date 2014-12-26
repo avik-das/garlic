@@ -939,11 +939,11 @@ module AST
     def codegen(vm)
       if name.to_s.include?(":")
         module_prefix, internal_name = name.to_s.split(":")
+        varname = vm.addvarname(Var.new(internal_name))
+        vm.movlabelreg varname, "%rdi"
+
         vm.with_aligned_stack do
-          getter_name = VM::VM.getter_name_for_exported_symbol(
-            module_prefix,
-            internal_name
-          )
+          getter_name = VM::VM.getter_name_for_module(module_prefix)
           vm.call getter_name
         end
       else
@@ -1303,10 +1303,9 @@ module VM
       prologue
     end
 
-    def self.getter_name_for_exported_symbol(module_name, symbol_name)
+    def self.getter_name_for_module(module_name)
       symbol_prefix = symbol_prefix_from_module_name(module_name)
-      normalized_symbol_name = normalized_name_for_name(symbol_name)
-      getter_name = "module_get_#{symbol_prefix}_#{normalized_symbol_name}"
+      "module_get_#{symbol_prefix}"
     end
 
     def prologue
@@ -1402,27 +1401,22 @@ module VM
 
       asm "        add     $8, %rsp"
       asm "        ret"
-
       asm ""
-      @module_exports.each do |name|
-        # TODO: error checking
-        internal_label = @varnames[name.to_s]
 
-        module_name = File.basename(@module_name)
-        getter_name = VM.getter_name_for_exported_symbol(module_name, name)
+      module_name = File.basename(@module_name)
+      getter_name = VM.getter_name_for_module(module_name)
 
-        asm "        .global cdecl(#{getter_name})"
-        asm "cdecl(#{getter_name}):"
-        asm "        sub     $8, %rsp"
+      asm "        .global cdecl(#{getter_name})"
+      asm "cdecl(#{getter_name}):"
+      asm "        sub     $8, %rsp"
 
-        asm "        movlabelreg(#{@symbol_prefix}_root_frame, %rdi)"
-        asm "        mov     (%rdi), %rdi"
-        asm "        movlabelreg(#{internal_label}, %rsi)"
+      asm "        mov     %rdi, %rsi"
+      asm "        movlabelreg(#{@symbol_prefix}_root_frame, %rdi)"
+      asm "        mov     (%rdi), %rdi"
 
-        call "find_in_frame"
-        asm "        add     $8, %rsp"
-        asm "        ret"
-      end
+      call "find_in_frame"
+      asm "        add     $8, %rsp"
+      asm "        ret"
       asm ""
 
       asm "        .data"
