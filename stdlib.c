@@ -67,6 +67,16 @@ void add_to_frame(struct frame_t *frame, char *str, scm_value_t value) {
     hashmap_put(frame->vars, str, value);
 }
 
+void add_native_function_to_frame(
+        struct frame_t *frame,
+        char *str,
+        void *fnpointer) {
+    //printf("adding native fn \"%s\" w/ value %p to frame %p!\n",
+    //        str, fnpointer, frame);
+
+    hashmap_put(frame->vars, str, make_fn(frame, fnpointer));
+}
+
 struct frame_t * new_frame() {
     struct frame_t *frame = (struct frame_t *) malloc(sizeof(struct frame_t));
     frame->vars = hashmap_new();

@@ -80,6 +80,7 @@ module AST
 
   class SchemeModule
     MODULE_TYPE_SCM = :scheme
+    MODULE_TYPE_C   = :c
 
     def initialize(filename,
                    module_name,
@@ -127,20 +128,33 @@ module AST
       @statements = @statements.map(&:static_transformed)
       @statements = with_hoisted_definitions(@statements)
 
-      @module_requires = gathered_requires(module_requires)
+      module_requires = gathered_requires(module_requires)
+      @recursive_requires = recursive_require_modules(module_requires)
+
       @module_exports = gathered_exports(module_exports)
 
       self
     end
 
-    def recursive_require_modules
-      @module_requires.map { |name|
-        gather_asts(
-          "#{name}.scm",
-          name,
-          false,
-          SchemeModule::MODULE_TYPE_SCM
-        )
+    def recursive_require_modules(module_requires)
+      module_requires.map { |name|
+        if File.file?("#{name}.scm")
+          gather_asts(
+            "#{name}.scm",
+            name,
+            false,
+            SchemeModule::MODULE_TYPE_SCM
+          )
+        elsif File.file?("#{name}.c")
+          gather_asts(
+            "#{name}.c",
+            name,
+            false,
+            SchemeModule::MODULE_TYPE_C
+          )
+        else
+          raise ParseException.new("required module not found: #{name}")
+        end
       }.uniq { |m| m.filename }
     end
 
@@ -191,8 +205,10 @@ module AST
     end
 
     attr :statements
-    attr_accessor :filename
+    attr_accessor :filename, :recursive_requires
   end
+
+  class CModule; end
 
   class Node
     def has_children?
@@ -853,8 +869,11 @@ module AST
       case module_type
       when MODULE_TYPE_SCM
         ast.codegen(filename, module_name, is_main)
+      when MODULE_TYPE_C
+        ast.codegen(filename, module_name)
       else
-        raise CompileException.new("unknown module type: #{module_type}")
+        raise CompileException.new(
+          "unknown module type: #{module_type} for filename: #{filename}")
       end
     end
   end
@@ -865,7 +884,7 @@ module AST
         filename,
         symbol_prefix,
         is_main,
-        @module_requires,
+        @recursive_requires,
         @module_exports
       )
 
@@ -874,6 +893,123 @@ module AST
       end
 
       vm.commit
+    end
+  end
+
+  class CModule
+    def codegen(filename, module_name)
+      @statements = []
+
+      wrapper_prefix = VM::VM.symbol_prefix_from_module_name(module_name)
+      wrapper_filename = VM::VM.output_filename(module_name)
+      module_base_name = File.basename(module_name)
+
+      main_name = "init_#{wrapper_prefix}"
+
+      asm "# MACROS: needed for cross-platform compatibility"
+
+      asm "#if defined(__WIN32__) || defined(__APPLE__)"
+      asm "# define cdecl(s) _##s"
+      asm "#else"
+      asm "# define cdecl(s) s"
+      asm "#endif"
+
+      asm ""
+
+      asm "#if defined(__APPLE__)"
+      asm "# define movlabelreg(src, dst) movq    src##\@GOTPCREL(%rip), dst"
+      asm "#else"
+      asm "# define movlabelreg(src, dst) mov     $##src##, dst"
+      asm "#endif"
+
+      asm ""
+
+      asm "#if defined(__APPLE__)"
+      asm "# define movlabelvalreg(src, dst) \\"
+      asm "    movq    src##\@GOTPCREL(%rip), %r8 ;\\"
+      asm "    movq    (%r8), dst"
+      asm "#else"
+      asm "# define movlabelvalreg(src, dst) movq    src##, dst"
+      asm "#endif"
+
+      asm ""
+
+      asm "#if defined(__APPLE__)"
+      asm "# define movreglabel(src, dst) \\"
+      asm "    movq    dst##\@GOTPCREL(%rip), %r8 ;\\"
+      asm "    movq    src, (%r8)"
+      asm "#else"
+      asm "# define movreglabel(src, dst) movq    src, dst"
+      asm "#endif"
+
+      asm ""
+      asm "        .global cdecl(#{main_name})"
+      asm ""
+      asm "        .text"
+      asm "cdecl(#{main_name}):"
+      asm "        movlabelvalreg(#{wrapper_prefix}_is_initialized, %rax)"
+      asm "        cmpq    $0, %rax"
+      asm "        je      #{main_name}_do_init"
+      asm "        ret"
+      asm "#{main_name}_do_init:"
+      asm "        movreglabel($1, #{wrapper_prefix}_is_initialized)"
+      asm "        sub     $8, %rsp"
+      asm "        call    cdecl(new_root_frame)"
+      asm "        movreglabel(%rax, #{wrapper_prefix}_root_frame)"
+      asm ""
+
+      asm "        movlabelreg(cdecl(#{module_base_name}_exports), %rax)"
+      asm "#{wrapper_prefix}_exports_loop:"
+      asm "hello1:"
+      asm "        cmpq    $0, %rax"
+      asm "hello2:"
+      asm "        je      #{wrapper_prefix}_exports_loop_done"
+      asm "        movlabelreg(#{wrapper_prefix}_root_frame, %rdi)"
+      asm "        movq    (%rdi), %rdi"
+      asm "        movq    (%rax), %rsi"
+      asm "        movq    8(%rax), %rdx"
+      asm "        call    cdecl(add_native_function_to_frame)"
+      asm "        add     $16, %rbx"
+      asm "        jmp     #{wrapper_prefix}_exports_loop"
+      asm "#{wrapper_prefix}_exports_loop_done:"
+
+      asm "        add     $8, %rsp"
+      asm "        ret"
+      asm ""
+
+      getter_name = VM::VM.getter_name_for_module(module_base_name)
+
+      asm "        .global cdecl(#{getter_name})"
+      asm "cdecl(#{getter_name}):"
+      asm "        sub     $8, %rsp"
+
+      asm "        mov     %rdi, %rsi"
+      asm "        movlabelreg(#{wrapper_prefix}_root_frame, %rdi)"
+      asm "        mov     (%rdi), %rdi"
+
+      asm "        call    cdecl(find_in_frame)"
+      asm "        add     $8, %rsp"
+      asm "        ret"
+      asm ""
+
+      asm "        .data"
+      asm ""
+
+      asm "#{wrapper_prefix}_root_frame:"
+      asm "        .quad 0"
+      asm "#{wrapper_prefix}_is_initialized:"
+      asm "        .quad 0"
+
+      File.open(wrapper_filename, 'w') do |f|
+        f.puts(@statements.join("\n"))
+      end
+
+      source_build_filename = VM::VM.output_filename(module_name, 'c')
+      FileUtils.copy_file(filename, source_build_filename)
+    end
+
+    def asm(statement)
+      @statements << statement
     end
   end
 
@@ -1376,7 +1512,8 @@ module VM
       push("%rax")
 
       asm ""
-      @module_requires.each do |name|
+      @module_requires.each do |mod|
+        name = mod.module_name
         call "init_#{VM.symbol_prefix_from_module_name(name)}"
       end
     end
@@ -1638,8 +1775,8 @@ module VM
       "m_#{Digest::MD5.hexdigest(module_name.to_s)}"
     end
 
-    def self.output_filename(module_name)
-      "build/#{self.symbol_prefix_from_module_name(module_name)}.S"
+    def self.output_filename(module_name, extension = 'S')
+      "build/#{self.symbol_prefix_from_module_name(module_name)}.#{extension}"
     end
 
   end
@@ -1681,24 +1818,41 @@ def gather_asts(filename,
                 module_name,
                 is_main,
                 module_type = AST::SchemeModule::MODULE_TYPE_SCM)
-  file = File.read(filename)
-  parsed = Scheme.new.parse(file)
-  ast = AST.construct_from_parse_tree(parsed, filename)
+  case module_type
+  when AST::SchemeModule::MODULE_TYPE_SCM
+    file = File.read(filename)
+    parsed = Scheme.new.parse(file)
+    ast = AST.construct_from_parse_tree(parsed, filename)
 
-  child_modules = ast.recursive_require_modules
+    child_modules = ast.recursive_requires
 
-  AST::SchemeModule.new(
-    filename,
-    module_name,
-    is_main,
-    module_type,
-    ast,
-    child_modules
-  )
+    AST::SchemeModule.new(
+      filename,
+      module_name,
+      is_main,
+      module_type,
+      ast,
+      child_modules
+    )
+  when AST::SchemeModule::MODULE_TYPE_C
+    ast = AST::CModule.new
+
+    AST::SchemeModule.new(
+      filename,
+      module_name,
+      is_main,
+      module_type,
+      ast,
+      []
+    )
+  else
+    raise ParseException.new(
+      "unrecognized module type: #{module_type} for filename: #{filename}")
+  end
 end
 
 def run_gcc(out_filename)
-  system "gcc -g build/*.S stdlib.c stdlib.S hashmap.c -o #{out_filename}"
+  system "gcc -g build/* stdlib.c stdlib.S hashmap.c -o #{out_filename}"
 end
 
 def compiler_dir
