@@ -3,6 +3,7 @@
 require 'parslet'
 require 'singleton'
 require 'digest/md5'
+require 'securerandom'
 require 'fileutils'
 
 ## INITIAL PARSER ##############################################################
@@ -1241,6 +1242,7 @@ module AST
 
       vm.argframe
       vm.movlabelreg name, "%rsi"
+      vm.asm "        mov     $0, %rdx" # not native
       vm.with_aligned_stack do
         vm.call "make_fn"
       end
@@ -1271,9 +1273,20 @@ module AST
         # Evaluate the expression in order to get the wrapped function pointer.
         @func.codegen(vm)
 
+        callname = SecureRandom.hex
+
         vm.asm "        mov     %rax, %rdi"
         vm.asm "        mov     $#{filtered_args.size}, %rsi"
+
+        vm.asm "        movq    24(%rax), %rdx" # fn->is_native
+        vm.asm "        cmpq    $1, %rdx"
+
+        vm.asm "        je      native_call_#{callname}"
         vm.call "scm_fncall"
+        vm.asm "        jmp     call_end_#{callname}"
+        vm.asm "native_call_#{callname}:"
+        vm.call "native_fncall"
+        vm.asm "call_end_#{callname}:"
 
         vm.popn(filtered_args.size)
       end

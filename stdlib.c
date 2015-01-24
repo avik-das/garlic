@@ -40,7 +40,8 @@ struct frame_t {
     struct frame_t *parent;
 };
 
-scm_value_t make_fn(struct frame_t *parent_frame, void *fnpointer);
+scm_value_t make_fn(struct frame_t *parent_frame, void *fnpointer,
+        int is_native);
 
 scm_value_t find_in_frame(struct frame_t *frame, char *str) {
     //printf("looking up var \"%s\" in frame %p!\n", str, frame);
@@ -74,7 +75,7 @@ void add_native_function_to_frame(
     //printf("adding native fn \"%s\" w/ value %p to frame %p!\n",
     //        str, fnpointer, frame);
 
-    hashmap_put(frame->vars, str, make_fn(frame, fnpointer));
+    hashmap_put(frame->vars, str, make_fn(frame, fnpointer, 1));
 }
 
 struct frame_t * new_frame() {
@@ -88,18 +89,18 @@ struct frame_t * new_frame() {
 struct frame_t * new_root_frame() {
     struct frame_t *frame = new_frame();
 
-    add_to_frame(frame, "+", make_fn(frame, stdlib_sum));
-    add_to_frame(frame, "-", make_fn(frame, stdlib_difference));
-    add_to_frame(frame, "*", make_fn(frame, stdlib_mul));
+    add_to_frame(frame, "+", make_fn(frame, stdlib_sum, 0));
+    add_to_frame(frame, "-", make_fn(frame, stdlib_difference, 0));
+    add_to_frame(frame, "*", make_fn(frame, stdlib_mul, 0));
 
-    add_to_frame(frame, "cons", make_fn(frame, stdlib_cons));
-    add_to_frame(frame, "car", make_fn(frame, stdlib_car));
-    add_to_frame(frame, "cdr", make_fn(frame, stdlib_cdr));
-    add_to_frame(frame, "null?", make_fn(frame, stdlib_nullp));
-    add_to_frame(frame, "=", make_fn(frame, stdlib_equal_sign));
+    add_to_frame(frame, "cons", make_fn(frame, stdlib_cons, 0));
+    add_to_frame(frame, "car", make_fn(frame, stdlib_car, 0));
+    add_to_frame(frame, "cdr", make_fn(frame, stdlib_cdr, 0));
+    add_to_frame(frame, "null?", make_fn(frame, stdlib_nullp, 0));
+    add_to_frame(frame, "=", make_fn(frame, stdlib_equal_sign, 0));
 
-    add_to_frame(frame, "display", make_fn(frame, stdlib_display));
-    add_to_frame(frame, "newline", make_fn(frame, stdlib_newline));
+    add_to_frame(frame, "display", make_fn(frame, stdlib_display, 0));
+    add_to_frame(frame, "newline", make_fn(frame, stdlib_newline, 0));
 
     return frame;
 }
@@ -129,6 +130,7 @@ struct scm_lambda {
     struct scm_value super;
     struct frame_t *parent_frame;
     void *function;
+    int64_t is_native;
 };
 
 struct scm_atom {
@@ -202,13 +204,15 @@ static inline int value_is_cons(scm_value_t value) {
     return ((struct scm_value *) value)->type == SCM_TYPE_CONS;
 }
 
-scm_value_t make_fn(struct frame_t *parent_frame, void *fnpointer) {
+scm_value_t make_fn(struct frame_t *parent_frame, void *fnpointer,
+        int is_native) {
     struct scm_lambda *fn = (struct scm_lambda *)
         malloc(sizeof(struct scm_lambda));
 
     fn->super.type = SCM_TYPE_LAMBDA;
     fn->parent_frame = parent_frame;
     fn->function = fnpointer;
+    fn->is_native = is_native;
 
     //printf("returning wrapped lambda %p pointing to %p and parent frame %p\n",
     //        fn, fnpointer, parent_frame);

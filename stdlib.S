@@ -5,6 +5,7 @@
 #endif
 
          .global cdecl(scm_fncall)
+         .global cdecl(native_fncall)
          .global cdecl(gather_varargs)
 
 # stdlib functions
@@ -51,6 +52,21 @@ cdecl(scm_fncall):
         mov     16(%rax), %rax          # dereference the lambda's function
         call    *%rax                   #   pointer and call it
         add     $8, %rsp                # remove the new frame from the stack
+        ret
+
+cdecl(native_fncall):
+        push    %rdi                    # save the lambda on the stack
+        push    %rsi                    # save the number of arguments
+        sub     $8, %rsp                # align the stack
+        call    cdecl(gather_varargs)
+        mov     %rax, %rdi
+        add     $8, %rsp
+        pop     %rsi                    # grab the number of arguments again
+        pop     %rax                    #   and the lambda
+        sub     $8, %rsp                # align the stack
+        mov     16(%rax), %rax          # dereference the lambda's function
+        call    *%rax                   #   pointer and call it
+        add     $8, %rsp
         ret
 
 cdecl(gather_varargs):

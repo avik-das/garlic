@@ -1,20 +1,48 @@
 #include <stdio.h>
 
 // TODO: move this to a standard header
+#include <inttypes.h>
+
 typedef struct scm_native_export {
     char *name;
     void *fn;
 } scm_native_export_t;
 
-// TODO: move this to a standard header
-#define INT_TO_FIXNUM(n) (((n) << 1) | 1)
+typedef void * scm_value_t;
 
-int return_scm_num() {
-    printf("Returning a number from C!\n");
-    return INT_TO_FIXNUM(7);
+enum scm_value_type {
+    SCM_TYPE_LAMBDA = 0,
+    SCM_TYPE_ATOM,
+    SCM_TYPE_STRING,
+    SCM_TYPE_CONS
+};
+
+struct scm_value {
+    enum scm_value_type type;
+};
+
+struct scm_cons {
+    struct scm_value super;
+    scm_value_t car;
+    scm_value_t cdr;
+};
+
+#define INT_TO_FIXNUM(n) (((n) << 1) | 1)
+#define FIXNUM_TO_INT(n) ((n) >> 1)
+
+int add(scm_value_t input) {
+    struct scm_cons *ls = (struct scm_cons *) input;
+
+    int64_t a = (int64_t) ls->car;
+    int64_t b = (int64_t) ((struct scm_cons *) ls->cdr)->car;
+
+    printf("Adding %" PRId64 " and %" PRId64 " in C!\n",
+            FIXNUM_TO_INT(a), FIXNUM_TO_INT(b));
+
+    return INT_TO_FIXNUM(FIXNUM_TO_INT(a) + FIXNUM_TO_INT(b));
 }
 
 scm_native_export_t libctest_exports[] = {
-    {"return_scm_num", return_scm_num},
+    {"add", add},
     0
 };
