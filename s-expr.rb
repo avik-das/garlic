@@ -1203,7 +1203,7 @@ module AST
 
       # Now set up the pointer to the first non-vararg argument:
       vm.asm "        mov     %rsp, %r8"
-      vm.asm "        add     $32, %r8"
+      vm.asm "        add     $16, %r8"
 
       if is_vararg
         vm.asm "        mov     %rsi, %rax"
@@ -1369,7 +1369,7 @@ module AST
       # assumes that we will, so after that fictitious return address is
       # pushed, we want to end up back at the same point we are at now.
       vm.with_aligned_stack(-1) do
-        vm.newframe
+        vm.new_empty_frame
         vm.push("%rax")
 
         case let_type
@@ -1443,7 +1443,8 @@ module VM
       @quotedatoms = {}
       @stringnames = {}
 
-      @frame_offsets = [0]
+      @frame_offsets = []
+      new_empty_frame
 
       # counters
       @currfn = 0
@@ -1694,7 +1695,7 @@ module VM
       end
     end
 
-    def newframe
+    def new_empty_frame
       @frame_offsets.push(0)
     end
 
@@ -1703,24 +1704,13 @@ module VM
     end
 
     def fnstart
-      # The current frame is there on the stack, right before the return
-      # address, but it's useful to have it available right at the top of the
-      # current frame offset so that vm.argframe can continue to work.
-
-      # This is definitely not the most efficient way to handle this, since
-      # this duplicates the frame pointer right before and after the return
-      # address. One option might be to separate the stack frame offset from
-      # the environment frame offset so vm.argframe can continue to work
-      # independently of the stack alignment.
-      newframe
-
-      asm "        mov     8(%rsp), %rax"
-      push("%rax")
+      # stdlib has done the work of creating a new frame for this function
+      # and pushed it onto the stack.
+      @frame_offsets.push(8)
     end
 
     def fnend
-      # Remove the duplicated current frame pointer.
-      pop
+      pop # remove the current frame pointer
       remframe
     end
 

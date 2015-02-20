@@ -50,23 +50,21 @@ cdecl(scm_fncall):
         pop     %rax                    #   and the lambda
         push    %rdi                    # save the new frame
         mov     16(%rax), %rax          # dereference the lambda's function
-        call    *%rax                   #   pointer and call it
-        add     $8, %rsp                # remove the new frame from the stack
-        ret
+        jmp     *%rax                   #   pointer and call it
 
 cdecl(native_fncall):
-        push    %rdi                    # save the lambda on the stack
-        push    %rsi                    # save the number of arguments
+        mov     %rdi, %r14              # save the lambda
+        mov     %rsi, %r15              # save the number
         sub     $8, %rsp                # align the stack
         call    cdecl(gather_varargs)
         mov     %rax, %rdi
-        add     $8, %rsp
-        pop     %rsi                    # grab the number of arguments again
-        pop     %rax                    #   and the lambda
+        add     $8, %rsp                # unalign the stack
+        mov     %r15, %rsi              # grab the number of arguments again
+        mov     %r14, %rax              #   and the lambda
         sub     $8, %rsp                # align the stack
         mov     16(%rax), %rax          # dereference the lambda's function
         call    *%rax                   #   pointer and call it
-        add     $8, %rsp
+        add     $8, %rsp                # unalign the stack
         ret
 
 cdecl(gather_varargs):
@@ -74,15 +72,14 @@ cdecl(gather_varargs):
         # called right at the beginning of executing a function body, so the
         # stack contains the following elements:
         #
-        # %rsp - return address to the calling function
-        #        "empty" spot for stack alignment
-        #        return address to scm_fncall
+        # %rsp - return address to caller of gather_varargs
         #        stack frame pushed by scm_fncall
+        #        return address to original caller of function
         #        first argument to gather
 
         mov     %rsi, %r8               # save the number of arguments
         mov     %rsp, %r9               # save the stack pointer
-        add     $40, %r9                #   but start at the first argument
+        add     $24, %r9                #   but start at the first argument
         mov     $0, %rsi                # load nil as the last list element
         mov     %r8, %r10               # %r8 will be used as the loop counter
 gather_varargs_begin:                   #   so save the original value too
@@ -108,7 +105,6 @@ gather_varargs_done:
 
 cdecl(stdlib_sum):
         # ignore the pushed frame
-        sub     $8, %rsp
         call    cdecl(gather_varargs)
         mov     %rax, %rdi
         call    cdecl(stdlib_impl_sum)
@@ -117,7 +113,6 @@ cdecl(stdlib_sum):
 
 cdecl(stdlib_difference):
         # ignore the pushed frame
-        sub     $8, %rsp
         call    cdecl(gather_varargs)
         mov     %rax, %rdi
         call    cdecl(stdlib_impl_difference)
@@ -126,7 +121,6 @@ cdecl(stdlib_difference):
 
 cdecl(stdlib_mul):
         # ignore the pushed frame
-        sub     $8, %rsp
         call    cdecl(gather_varargs)
         mov     %rax, %rdi
         call    cdecl(stdlib_impl_mul)
@@ -135,36 +129,35 @@ cdecl(stdlib_mul):
 
 cdecl(stdlib_cons):
         # ignore the pushed frame
-        mov     32(%rsp), %rdi
-        mov     24(%rsp), %rsi
-        sub     $8, %rsp
+        mov     24(%rsp), %rdi
+        mov     16(%rsp), %rsi
         call    cdecl(make_cons)
         add     $8, %rsp
         ret
 
 cdecl(stdlib_car):
         # ignore the pushed frame
-        mov     24(%rsp), %rax
+        mov     16(%rsp), %rax
         mov     8(%rax), %rax
+        add     $8, %rsp
         ret
 
 cdecl(stdlib_cdr):
         # ignore the pushed frame
-        mov     24(%rsp), %rax
+        mov     16(%rsp), %rax
         mov     16(%rax), %rax
+        add     $8, %rsp
         ret
 
 cdecl(stdlib_nullp):
         # ignore the pushed frame
-        mov     24(%rsp), %rdi
-        sub     $8, %rsp
+        mov     16(%rsp), %rdi
         call    cdecl(stdlib_impl_nullp)
         add     $8, %rsp
         ret
 
 cdecl(stdlib_equal_sign):
         # ignore the pushed frame
-        sub     $8, %rsp
         call    cdecl(gather_varargs)
         mov     %rax, %rdi
         call    cdecl(stdlib_impl_equal_sign)
@@ -173,15 +166,13 @@ cdecl(stdlib_equal_sign):
 
 cdecl(stdlib_display):
         # ignore the pushed frame
-        mov     24(%rsp), %rdi
-        sub     $8, %rsp
+        mov     16(%rsp), %rdi
         call    cdecl(stdlib_impl_display)
         add     $8, %rsp
         ret
 
 cdecl(stdlib_newline):
         # ignore the pushed frame
-        sub     $8, %rsp
         call    cdecl(stdlib_impl_newline)
         add     $8, %rsp
         ret
