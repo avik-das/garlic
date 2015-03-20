@@ -3,7 +3,6 @@
 require 'parslet'
 require 'singleton'
 require 'digest/md5'
-require 'securerandom'
 require 'fileutils'
 
 ## INITIAL PARSER ##############################################################
@@ -418,6 +417,8 @@ module AST
               Let.new(:bare, *filtered_children)
             when :'let*'
               Let.new(:star, *filtered_children)
+            when :ccall
+              NativeCall.new(*filtered_children)
             else
               as_function_call
             end
@@ -676,6 +677,37 @@ module AST
     attr :func, :args
   end
 
+  class NativeCall < SpecializedNode
+    def initialize(*children)
+      # first entry is "ccall"
+      @func = children[1]
+      @args = children[2, children.size - 2]
+    end
+
+    def static_transformed
+      @func = @func.static_transformed
+      @args = @args.map(&:static_transformed)
+
+      self
+    end
+
+    def to_s
+      args_str = @args.map(&:to_s).join(" ")
+
+      if not args_str.empty?
+        args_str = " #{args_str}"
+      end
+
+      "(\033[#{self.internal_color}mccall #{@func}\033[0m#{args_str})"
+    end
+
+    def internal_color
+      "1;34"
+    end
+
+    attr :func, :args
+  end
+
   class If < SpecializedNode
     def initialize(*children)
       @children = children
@@ -863,6 +895,15 @@ end
 ## NATIVE CODE GENERATION ######################################################
 
 module AST
+  ARG_REGS = [
+    "rdi",
+    "rsi",
+    "rdx",
+    "rcx",
+    "r8",
+    "r9"
+  ]
+
   class SchemeModule
     class CompileException < Exception; end
 
@@ -1273,22 +1314,44 @@ module AST
         # Evaluate the expression in order to get the wrapped function pointer.
         @func.codegen(vm)
 
-        callname = SecureRandom.hex
-
         vm.asm "        mov     %rax, %rdi"
         vm.asm "        mov     $#{filtered_args.size}, %rsi"
-
-        vm.asm "        movq    24(%rax), %rdx" # fn->is_native
-        vm.asm "        cmpq    $1, %rdx"
-
-        vm.asm "        je      native_call_#{callname}"
         vm.call "scm_fncall"
-        vm.asm "        jmp     call_end_#{callname}"
-        vm.asm "native_call_#{callname}:"
-        vm.call "native_fncall"
-        vm.asm "call_end_#{callname}:"
 
         vm.popn(filtered_args.size)
+      end
+    end
+  end
+
+  class NativeCall < SpecializedNode
+    def codegen(vm)
+      # The number of actual arguments we'll push onto the stack is the number
+      # of arguments that don't fit inside the registers. We'll temporarily
+      # push all the arguments onto the stack, but the ones that fit in the
+      # registers will be popped off before the function is called.
+      num_reg_args = [ARG_REGS.size, @args.size].min
+      num_stk_args = @args.size - num_reg_args
+
+      vm.with_aligned_stack(num_stk_args) do
+        @args.reverse.each do |arg|
+          arg.codegen(vm)
+          vm.push("%rax")
+        end
+
+        # Evaluate the expression in order to get the wrapped function pointer,
+        # then deference the funtion inside the wrapper. We need to do this
+        # before populating the argument registers so we don't clobber them
+        # while evaluating the function reference.
+        @func.codegen(vm)
+        vm.asm "        mov     16(%rax), %rax"
+
+        ARG_REGS[0, num_reg_args].each.with_index do |reg|
+          vm.pop("%#{reg}")
+        end
+
+        vm.asm "        call    *%rax"
+
+        vm.popn(num_stk_args)
       end
     end
   end

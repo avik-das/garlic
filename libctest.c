@@ -30,12 +30,7 @@ struct scm_cons {
 #define INT_TO_FIXNUM(n) (((n) << 1) | 1)
 #define FIXNUM_TO_INT(n) ((n) >> 1)
 
-int add(scm_value_t input) {
-    struct scm_cons *ls = (struct scm_cons *) input;
-
-    int64_t a = (int64_t) ls->car;
-    int64_t b = (int64_t) ((struct scm_cons *) ls->cdr)->car;
-
+int64_t add(int64_t a, int64_t b) {
     printf("Adding %" PRId64 " and %" PRId64 " in C!\n",
             FIXNUM_TO_INT(a), FIXNUM_TO_INT(b));
 
