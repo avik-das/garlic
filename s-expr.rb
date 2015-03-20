@@ -180,7 +180,7 @@ module AST
         name = exp.children[1]
 
         if name.is_a?(Var)
-          basedir = compiler_dir
+          basedir = includes_dir
           absolute_path_for_module(name.name.to_s, basedir)
         elsif name.is_a?(String)
           basedir = File.dirname(self.filename)
@@ -1918,11 +1918,19 @@ def gather_asts(filename,
 end
 
 def run_gcc(out_filename)
-  system "gcc -g build/* stdlib.c stdlib.S hashmap.c -o #{out_filename}"
+  system(
+    "gcc -g -I stdlib-includes " +
+      "build/* stdlib.c stdlib.S hashmap.c " +
+      "-o #{out_filename}"
+  )
 end
 
 def compiler_dir
   File.dirname(__FILE__)
+end
+
+def includes_dir
+  "#{compiler_dir}/stdlib-includes"
 end
 
 def absolute_path_for_module(relative_path, basedir = nil)
