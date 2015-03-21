@@ -119,7 +119,8 @@ enum scm_value_type {
     SCM_TYPE_LAMBDA = 0,
     SCM_TYPE_ATOM,
     SCM_TYPE_STRING,
-    SCM_TYPE_CONS
+    SCM_TYPE_CONS,
+    SCM_TYPE_WRAPPED_NATIVE
 };
 
 struct scm_value {
@@ -147,6 +148,11 @@ struct scm_cons {
     struct scm_value super;
     scm_value_t car;
     scm_value_t cdr;
+};
+
+struct scm_wrapped_native {
+    struct scm_value super;
+    void *native_val;
 };
 
 static inline int value_is_nil(scm_value_t value) {
@@ -202,6 +208,14 @@ static inline int value_is_cons(scm_value_t value) {
     }
 
     return ((struct scm_value *) value)->type == SCM_TYPE_CONS;
+}
+
+static inline int value_is_wrapped_native(scm_value_t value) {
+    if (value_is_primitive(value)) {
+        return 0;
+    }
+
+    return ((struct scm_value *) value)->type == SCM_TYPE_WRAPPED_NATIVE;
 }
 
 scm_value_t make_fn(struct frame_t *parent_frame, void *fnpointer,
@@ -415,6 +429,9 @@ scm_value_t stdlib_impl_display(scm_value_t value) {
         printf("(");
         display_cons_inner(cons);
         printf(")");
+    } else if (value_is_wrapped_native(value)) {
+        printf("#<native: %p>",
+                ((struct scm_wrapped_native *) value)->native_val);
     }
 
     return NIL_VALUE;
@@ -423,4 +440,32 @@ scm_value_t stdlib_impl_display(scm_value_t value) {
 scm_value_t stdlib_impl_newline() {
     printf("\n");
     return NIL_VALUE;
+}
+
+/** USERLAND FUNCTIONS ********************************************************/
+
+scm_value_t scm_wrap_native(void *native_val) {
+    struct scm_wrapped_native *wrapped = (struct scm_wrapped_native *)
+        malloc(sizeof(struct scm_wrapped_native));
+
+    wrapped->super.type = SCM_TYPE_WRAPPED_NATIVE;
+    wrapped->native_val = native_val;
+
+    return wrapped;
+}
+
+const char * scm_unwrap_string(scm_value_t wrapped) {
+    if (!value_is_string(wrapped)) {
+        return NULL;
+    }
+
+    return ((struct scm_string *) wrapped)->contents;
+}
+
+void * scm_unwrap_native(scm_value_t wrapped) {
+    if (!value_is_wrapped_native(wrapped)) {
+        return NULL;
+    }
+
+    return ((struct scm_wrapped_native *) wrapped)->native_val;
 }

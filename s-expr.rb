@@ -1918,9 +1918,11 @@ def gather_asts(filename,
 end
 
 def run_gcc(out_filename)
+  # TODO: remove SDL args and have it be passed in by the user
   system(
     "gcc -g -I stdlib-includes " +
       "build/* stdlib.c stdlib.S hashmap.c " +
+      "-F ~/Library/Frameworks -framework SDL2 -framework SDL2_image " +
       "-o #{out_filename}"
   )
 end
