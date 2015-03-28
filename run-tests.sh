@@ -2,34 +2,34 @@
 
 failed=0
 
-function cleanup {
+cleanup() {
     rm -f test/tmp.result
     rm -f test/tmp.diff
 }
 
 clr_eol=`tput el`
 
-function log_info_clearable {
+log_info_clearable() {
     msg=$1
     # Don't output a newline since the line is meant to be cleared.
     printf "\033[1;32m$msg\033[0m"
 }
 
-function clear_line {
+clear_line() {
     printf "\r$clr_eol"
 }
 
-function log_info {
+log_info() {
     msg=$1
     printf "\033[1;32m$msg\033[0m\n"
 }
 
-function log_error {
+log_error() {
     msg=$1
     printf "\033[1;31m$msg\033[0m\n"
 }
 
-function fail {
+fail() {
     msg=$1
     log_error "$msg"
 
