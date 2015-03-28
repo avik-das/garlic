@@ -2,6 +2,7 @@ GEM
   remote: https://rubygems.org/
   specs:
     blankslate (2.1.2.4)
+    docopt (0.5.0)
     parslet (1.5.0)
       blankslate (~> 2.0)
 
@@ -9,4 +10,5 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
+  docopt (~> 0.5)
   parslet (~> 1.5)

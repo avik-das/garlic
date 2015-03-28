@@ -1851,7 +1851,6 @@ end
 ## FILE PROCESSING #############################################################
 
 BUILD_DIR = 'build'
-OUT_EXE = 'main'
 
 def create_fresh_build_env(out_exe_name, build_dir_name)
   if File.file?(out_exe_name)
@@ -1941,10 +1940,34 @@ end
 
 ## MAIN ########################################################################
 
-# TODO: check arguments (possibly read from stdin)
+VERSION = '0.1.0'
 
-create_fresh_build_env(OUT_EXE, BUILD_DIR)
-compile_file(absolute_path_for_module(ARGV[0]))
-run_gcc(OUT_EXE)
+# TODO:
+#   - accept arbitrary gcc/clang arguments (pass-through)
+#   - read from STDIN
+doc = <<USAGESTR
+USAGE: #{__FILE__} [options] <input-file>
+       #{__FILE__} (-h | --help)
+       #{__FILE__} --version
+
+OPTIONS:
+  -h, --help                           show this help message and exit
+  --version                            show version and exit
+  -o, --output EXECUTABLE              name of executable [default: main]
+USAGESTR
+
+require 'docopt'
+begin
+  args = Docopt::docopt(doc, version: VERSION)
+
+  in_file = args["<input-file>"]
+  out_exe = args["--output"]
+
+  create_fresh_build_env(out_exe, BUILD_DIR)
+  compile_file(absolute_path_for_module(in_file))
+  run_gcc(out_exe)
+rescue Docopt::Exit => e
+  puts e.message
+end
 
 # vim: ts=2 sw=2 :
