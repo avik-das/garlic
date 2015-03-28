@@ -1926,18 +1926,32 @@ def gather_asts(filename,
   end
 end
 
-def run_gcc(out_filename)
-  # TODO: remove SDL args and have it be passed in by the user
+def run_gcc(out_filename, compiler_opts)
+  # NOTE: compiler_opts is an array of strings, which add to the list of
+  # compiler options separated by spaces. However, if the user were to include
+  # an option that was quoted and contained spaces, it would be improperly
+  # handled:
+  #
+  #   #{__FILE__} input-file.scm -- a "b c" d
+  #
+  # would result in
+  #
+  #   gcc --hardcoded-args a b c d -o output
+  #
+  # Notice that "b c" is not preserved as a single argument. For now, we can
+  # accept this as a known limitation because this case should be rare. It can
+  # be revisted if necessary.
+  base = compiler_dir
   system(
-    "gcc -g -I stdlib-includes " +
-      "build/* stdlib.c stdlib.S hashmap.c " +
-      "-F ~/Library/Frameworks -framework SDL2 -framework SDL2_image " +
+    "gcc -g -I #{base}/stdlib-includes " +
+      "build/* #{base}/stdlib.c #{base}/stdlib.S #{base}/hashmap.c " +
+      "#{compiler_opts.join(" ")} " +
       "-o #{out_filename}"
   )
 end
 
 def compiler_dir
-  File.dirname(__FILE__)
+  File.dirname(File.absolute_path(__FILE__))
 end
 
 def includes_dir
@@ -1955,7 +1969,7 @@ VERSION = '0.1.0'
 # TODO:
 #   - accept arbitrary gcc/clang arguments (pass-through)
 doc = <<USAGESTR
-USAGE: #{__FILE__} [options] <input-file>
+USAGE: #{__FILE__} [options] <input-file> [-- <compiler-opts>...]
        #{__FILE__} (-h | --help)
        #{__FILE__} --version
 
@@ -1982,7 +1996,7 @@ begin
 
   create_fresh_build_env(out_exe, BUILD_DIR)
   compile_file(absolute_path_for_module(in_file))
-  run_gcc(out_exe)
+  run_gcc(out_exe, args["<compiler-opts>"])
 rescue Docopt::Exit => e
   puts e.message
 ensure

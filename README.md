@@ -22,3 +22,13 @@ Running the tests
 ```sh
 ./run-tests.sh
 ```
+
+SDL2 Example
+------------
+
+```sh
+cd sdl2-test
+make osx
+./main
+make clean
+```

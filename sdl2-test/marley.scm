@@ -5,7 +5,7 @@
 (define *height* 256)
 
 (define ctx (ccall sdl2:init *title* *width* *height*))
-(define img (ccall sdl2:load-img ctx "sdl2-test/bob-marley.jpg"))
+(define img (ccall sdl2:load-img ctx "bob-marley.jpg"))
 (ccall sdl2:show-img ctx img)
 (ccall sdl2:free-img img)
 
