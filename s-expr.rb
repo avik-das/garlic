@@ -4,6 +4,7 @@ require 'parslet'
 require 'singleton'
 require 'digest/md5'
 require 'fileutils'
+require 'tempfile'
 
 ## INITIAL PARSER ##############################################################
 
@@ -1852,6 +1853,15 @@ end
 
 BUILD_DIR = 'build'
 
+def read_into_tmp_file
+  file = Tempfile.new("scm")
+  contents = STDIN.read
+  file.write(contents)
+  file.close
+
+  file
+end
+
 def create_fresh_build_env(out_exe_name, build_dir_name)
   if File.file?(out_exe_name)
     FileUtils.rm(out_exe_name)
@@ -1944,7 +1954,6 @@ VERSION = '0.1.0'
 
 # TODO:
 #   - accept arbitrary gcc/clang arguments (pass-through)
-#   - read from STDIN
 doc = <<USAGESTR
 USAGE: #{__FILE__} [options] <input-file>
        #{__FILE__} (-h | --help)
@@ -1957,17 +1966,27 @@ OPTIONS:
 USAGESTR
 
 require 'docopt'
+
+tmp_file = nil
+
 begin
   args = Docopt::docopt(doc, version: VERSION)
 
   in_file = args["<input-file>"]
   out_exe = args["--output"]
 
+  if in_file == "-"
+    tmp_file = read_into_tmp_file
+    in_file = tmp_file.path
+  end
+
   create_fresh_build_env(out_exe, BUILD_DIR)
   compile_file(absolute_path_for_module(in_file))
   run_gcc(out_exe)
 rescue Docopt::Exit => e
   puts e.message
+ensure
+  tmp_file.unlink if tmp_file
 end
 
 # vim: ts=2 sw=2 :
