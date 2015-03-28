@@ -1,8 +1,10 @@
 all:
-	@# TODO: support linux
-	@echo "USAGE: make osx"
+	@echo "USAGE: make (linux | osx)"
 
-.PHONY: osx clean
+.PHONY: linux osx clean
+
+linux:
+	../s-expr.rb marley.scm -- -lSDL2 -lSDL2_image
 
 osx:
 	../s-expr.rb marley.scm -- -F ~/Library/Frameworks -framework SDL2 -framework SDL2_image

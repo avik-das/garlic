@@ -1,6 +1,17 @@
 #include <scm.h>
 #include <SDL2/SDL.h>
-#include <SDL2_image/SDL_image.h>
+
+#ifdef __APPLE__
+  #include <SDL2_image/SDL_image.h>
+#else
+  #include <SDL2/SDL_image.h>
+#endif
+
+// Support for SDL 2.0.0, which doesn't include this flag. If the flag is not
+// available, assume that high DPI support is also unavailable.
+#ifndef SDL_WINDOW_ALLOW_HIGHDPI
+  #define SDL_WINDOW_ALLOW_HIGHDPI 0
+#endif
 
 struct context {
     SDL_Window *window;
