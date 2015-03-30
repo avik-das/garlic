@@ -1966,8 +1966,6 @@ end
 
 VERSION = '0.1.0'
 
-# TODO:
-#   - accept arbitrary gcc/clang arguments (pass-through)
 doc = <<USAGESTR
 USAGE: #{__FILE__} [options] <input-file> [-- <compiler-opts>...]
        #{__FILE__} (-h | --help)
