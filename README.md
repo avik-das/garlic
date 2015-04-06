@@ -28,7 +28,7 @@ SDL2 Example
 
 ```sh
 cd sdl2-test
-make osx
-./main
+make
+./marley
 make clean
 ```

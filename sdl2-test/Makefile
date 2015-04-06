@@ -1,13 +1,15 @@
-all:
-	@echo "USAGE: make (linux | osx)"
+OS = $(shell uname)
 
-.PHONY: linux osx clean
+ifeq "$(OS)" "Darwin"
+CFLAGS = -F ~/Library/Frameworks -framework SDL2 -framework SDL2_image
+else # Linux
+CFLAGS = -lSDL2 -lSDL2_image
+endif
 
-linux:
-	../s-expr.rb marley.scm -- -lSDL2 -lSDL2_image
+marley: marley.scm
+	../s-expr.rb -o $@ $< -- $(CFLAGS)
 
-osx:
-	../s-expr.rb marley.scm -- -F ~/Library/Frameworks -framework SDL2 -framework SDL2_image
+.PHONY: clean
 
 clean:
-	rm -rf build main main.dSYM
+	rm -rf build marley marley.dSYM
