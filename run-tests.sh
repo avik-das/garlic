@@ -36,13 +36,18 @@ fail() {
     failed=`expr $failed + 1`
 }
 
+log_info "Running unit tests"
+echo
+ruby test/rb/test_master.rb
+echo
+
 rm -f test/tmp
 
 num_success_tests=`ls -1 test/success/*.scm | wc -l`
 num_failure_tests=`ls -1 test/failure/*.scm | wc -l`
 num_total_tests=`expr $num_success_tests + $num_failure_tests`
 
-log_info "Running $num_total_tests tests"
+log_info "Running $num_total_tests functional tests"
 echo
 
 for testfile in test/success/*.scm; do
