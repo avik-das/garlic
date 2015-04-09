@@ -5,6 +5,7 @@ require 'singleton'
 require 'digest/md5'
 require 'fileutils'
 require 'tempfile'
+require 'set'
 require_relative 'c_parse'
 
 ## INITIAL PARSER ##############################################################
@@ -124,7 +125,9 @@ module AST
       @statements = statements
     end
 
-    def static_transformed
+    def static_transformed(included_modules)
+      @included_modules = included_modules
+
       @statements, module_requires = separated_module_requires(@statements)
       @statements, module_exports = separated_module_exports(@statements)
       @statements = @statements.map(&:static_transformed)
@@ -141,23 +144,31 @@ module AST
     def recursive_require_modules(module_requires)
       module_requires.map { |name|
         if File.file?("#{name}.scm")
+          filename = "#{name}.scm"
+          next if @included_modules.include?(filename)
+
           gather_asts(
-            "#{name}.scm",
+            filename,
             name,
             false,
-            SchemeModule::MODULE_TYPE_SCM
+            SchemeModule::MODULE_TYPE_SCM,
+            @included_modules
           )
         elsif File.file?("#{name}.c")
+          filename = "#{name}.c"
+          next if @included_modules.include?(filename)
+
           gather_asts(
-            "#{name}.c",
+            filename,
             name,
             false,
-            SchemeModule::MODULE_TYPE_C
+            SchemeModule::MODULE_TYPE_C,
+            @included_modules
           )
         else
           raise ParseException.new("required module not found: #{name}")
         end
-      }.uniq { |m| m.filename }
+      }.compact.uniq { |m| m.filename }
     end
 
     def separated_module_requires(statements)
@@ -854,10 +865,10 @@ module AST
     rule(exprs: sequence(:x)) { Program.new(*x) }
   end
 
-  def AST.construct_from_parse_tree(tree, filename)
+  def AST.construct_from_parse_tree(tree, filename, included_modules)
     ast = ASTTransform.new.apply(tree)
     ast.filename = filename
-    ast = ast.static_transformed
+    ast = ast.static_transformed(included_modules)
   end
 end
 
@@ -1858,12 +1869,16 @@ end
 def gather_asts(filename,
                 module_name,
                 is_main,
-                module_type = AST::SchemeModule::MODULE_TYPE_SCM)
+                module_type = AST::SchemeModule::MODULE_TYPE_SCM,
+                gathered = nil)
+  gathered ||= Set.new
+  gathered << filename
+
   case module_type
   when AST::SchemeModule::MODULE_TYPE_SCM
     file = File.read(filename)
     parsed = Scheme.new.parse(file)
-    ast = AST.construct_from_parse_tree(parsed, filename)
+    ast = AST.construct_from_parse_tree(parsed, filename, gathered)
 
     child_modules = ast.recursive_requires
 
