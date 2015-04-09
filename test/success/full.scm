@@ -241,7 +241,7 @@
 (newline)
 
 (require stdlib)
-(require display-helpers)
+(require display-helpers => disp)
 
 ; Some of these functions have the same name as ones defined in this file, but
 ; there is no conflict due to namespacing.
@@ -251,14 +251,14 @@
 
 (newline)
 
-(display-helpers:display-with-tag
+(disp:display-with-tag
   "INFO"
   "this is calling a function in display-helpers")
-(display-helpers:display-with-tag "DEBUG" "debugging output...")
+(disp:display-with-tag "DEBUG" "debugging output...")
 
 (newline)
 
-(display-helpers:display-non-null
+(disp:display-non-null
   '("one" () "two" () "three"))
 
 (newline)
@@ -286,10 +286,10 @@
 (newline)
 
 (display (stdlib:list 'a 'b 'c 'd)) (newline)
-(display-helpers:display-all-with-tag "INFO"
-                                      "1st message"
-                                      "2nd message"
-                                      "3rd message")
+(disp:display-all-with-tag "INFO"
+                           "1st message"
+                           "2nd message"
+                           "3rd message")
 
 (newline)
 

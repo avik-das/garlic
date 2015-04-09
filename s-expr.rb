@@ -18,8 +18,8 @@ class Scheme < Parslet::Parser
   rule(:bool)      { str('#t').as(:true) | str('#f').as(:false) }
 
   rule(:simplevar) {
-    match('[A-Za-z\-\+\*\/_=]') >>
-      match('[A-Za-z\-\+\*\/_\?0-9=]').repeat(1).maybe
+    match('[A-Za-z\-\+\*\/_=<>]') >>
+      match('[A-Za-z\-\+\*\/_\?0-9=<>]').repeat(1).maybe
   }
 
   rule(:var)       {
@@ -118,6 +118,12 @@ module AST
     end
   end
 
+  RequireSpec = Struct.new(
+    :absolute_path,
+    :basename,
+    :nickname
+  )
+
   class Program
     include CommonTransformations
 
@@ -133,8 +139,8 @@ module AST
       @statements = @statements.map(&:static_transformed)
       @statements = with_hoisted_definitions(@statements)
 
-      module_requires = gathered_requires(module_requires)
-      @recursive_requires = recursive_require_modules(module_requires)
+      @module_requires = gathered_requires(module_requires)
+      @recursive_requires = recursive_require_modules(@module_requires)
 
       @module_exports = gathered_exports(module_exports)
 
@@ -142,7 +148,9 @@ module AST
     end
 
     def recursive_require_modules(module_requires)
-      module_requires.map { |name|
+      module_requires.map { |exp|
+        name = exp.absolute_path
+
         if File.file?("#{name}.scm")
           filename = "#{name}.scm"
           next if @included_modules.include?(filename)
@@ -194,14 +202,40 @@ module AST
 
         if name.is_a?(Var)
           basedir = includes_dir
-          absolute_path_for_module(name.name.to_s, basedir)
+          abs_path = absolute_path_for_module(name.name.to_s, basedir)
         elsif name.is_a?(String)
           basedir = File.dirname(self.filename)
-          absolute_path_for_module(name.contents, basedir)
+          abs_path = absolute_path_for_module(name.contents, basedir)
         else
           raise ParseException.new("require with invalid name: #{name}")
         end
-      }.flatten
+
+        basename = File.basename(abs_path)
+
+        if exp.children.size == 4
+          arrow = exp.children[2]
+          nickname = exp.children[3]
+
+          unless arrow.is_a?(Var) and arrow.name == :'=>'
+            raise ParseException.new("renamed require must include =>")
+          end
+
+          unless nickname.is_a?(Var)
+            raise ParseException.new(
+              "renamed require has invalid nickname: #{nickname}")
+          end
+
+          nickname = nickname.name
+        else
+          nickname = nil
+        end
+
+        RequireSpec.new(
+          abs_path,
+          basename,
+          nickname
+        )
+      }
     end
 
     def gathered_exports(module_exports)
@@ -218,7 +252,7 @@ module AST
     end
 
     attr :statements
-    attr_accessor :filename, :recursive_requires
+    attr_accessor :filename, :recursive_requires, :module_requires
   end
 
   class CModule; end
@@ -911,7 +945,7 @@ module AST
       )
 
       @statements.each do |statement|
-        statement.codegen(vm)
+        statement.codegen(vm, self)
       end
 
       vm.commit
@@ -1076,13 +1110,13 @@ module AST
   end
 
   class Comment < Node
-    def codegen(vm)
+    def codegen(vm, program)
       # do nothing!
     end
   end
 
   class QuotedAtom < Node
-    def codegen(vm)
+    def codegen(vm, program)
       name = vm.addquotedatom(@name)
       vm.movlabelreg "#{name}_name", "%rdi"
       vm.with_aligned_stack do
@@ -1092,13 +1126,13 @@ module AST
   end
 
   class QuotedList < Node
-    def codegen(vm)
+    def codegen(vm, program)
       vm.asm "        mov     $0, %rsi" if !is_nil_terminated
 
       @children.reverse.each_with_index do |child, index|
         if !is_nil_terminated or index > 0
           vm.push("%rsi")
-          child.codegen(vm)
+          child.codegen(vm, program)
           vm.pop("%rsi")
 
           vm.asm "        mov     %rax, %rdi"
@@ -1106,7 +1140,7 @@ module AST
             vm.call "make_cons"
           end
         else
-          child.codegen(vm)
+          child.codegen(vm, program)
         end
 
         unless index == @children.size - 1
@@ -1117,7 +1151,7 @@ module AST
   end
 
   class String < Node
-    def codegen(vm)
+    def codegen(vm, program)
       name = vm.addstring(@contents)
       vm.movlabelreg "#{name}_contents", "%rdi"
 
@@ -1128,20 +1162,39 @@ module AST
   end
 
   class Nil < Node
-    def codegen(vm)
+    def codegen(vm, program)
       vm.asm "        mov     $0, %rax"
     end
   end
 
   class Var < Node
-    def codegen(vm)
+    def codegen(vm, program)
       if name.to_s.include?(":")
         module_prefix, internal_name = name.to_s.split(":")
+
         varname = vm.addvarname(Var.new(internal_name))
         vm.movlabelreg varname, "%rdi"
 
+        require_spec = program
+          .module_requires
+          .find {|req|
+            req.basename == module_prefix ||
+              req.nickname.to_s == module_prefix
+          }
+
+        if require_spec.nil?
+          raise SchemeModule::CompileException.new(
+            "unable to find required module: #{module_prefix}")
+        elsif require_spec.basename == module_prefix and require_spec.nickname
+          raise SchemeModule::CompileException.new(
+            "renamed module #{require_spec.basename} " +
+              "not referred by nickname #{require_spec.nickname}")
+        else
+          actual_module_prefix = require_spec.basename
+        end
+
         vm.with_aligned_stack do
-          getter_name = VM::VM.getter_name_for_module(module_prefix)
+          getter_name = VM::VM.getter_name_for_module(actual_module_prefix)
           vm.call getter_name
         end
       else
@@ -1157,7 +1210,7 @@ module AST
   end
 
   class IntVal < Node
-    def codegen(vm)
+    def codegen(vm, program)
       # TODO: large numbers
       val = (@value << 1) | 0x1
       vm.asm "        mov     $#{val}, %rax"
@@ -1165,21 +1218,21 @@ module AST
   end
 
   class TrueVal < Node
-    def codegen(vm)
+    def codegen(vm, program)
       vm.asm "        mov     $2, %rax"
     end
   end
 
   class FalseVal < Node
-    def codegen(vm)
+    def codegen(vm, program)
       vm.asm "        mov     $4, %rax"
     end
   end
 
   class Definition < SpecializedNode
-    def codegen(vm)
+    def codegen(vm, program)
       varname = vm.addvarname(@name)
-      @value.codegen(vm)
+      @value.codegen(vm, program)
       # now the value is in %rax
       vm.argframe
       vm.movlabelreg varname, "%rsi"
@@ -1191,7 +1244,7 @@ module AST
   end
 
   class Lambda < SpecializedNode
-    def codegen(vm)
+    def codegen(vm, program)
       # Generating code for a lambda is a bit involved, so it's good to list
       # out the steps.
       #
@@ -1282,7 +1335,7 @@ module AST
       end
 
       body_statements.each do |statement|
-        statement.codegen(vm)
+        statement.codegen(vm, program)
       end
 
       vm.fnend
@@ -1302,7 +1355,7 @@ module AST
   end
 
   class FunctionCall < SpecializedNode
-    def codegen(vm)
+    def codegen(vm, program)
       # First, generate code for each argument and push it onto the stack in
       # reverse order. This is because arguments that don't fit in the
       # registers are pushed onto the stack from right to left. Additionally,
@@ -1318,12 +1371,12 @@ module AST
 
       vm.with_aligned_stack(filtered_args.size) do
         filtered_args.reverse.each do |arg|
-          arg.codegen(vm)
+          arg.codegen(vm, program)
           vm.push("%rax")
         end
 
         # Evaluate the expression in order to get the wrapped function pointer.
-        @func.codegen(vm)
+        @func.codegen(vm, program)
 
         vm.asm "        mov     %rax, %rdi"
         vm.asm "        mov     $#{filtered_args.size}, %rsi"
@@ -1335,27 +1388,27 @@ module AST
   end
 
   class If < SpecializedNode
-    def codegen(vm)
+    def codegen(vm, program)
       label = vm.gencondname
 
-      @cond.codegen(vm)
+      @cond.codegen(vm, program)
 
       vm.asm "        cmp     $4, %rax"
       vm.asm "        je      #{label}_false"
 
-      @true_expr.codegen(vm)
+      @true_expr.codegen(vm, program)
 
       vm.asm "        jmp     #{label}_end"
       vm.asm "#{label}_false:"
 
-      @false_expr.codegen(vm)
+      @false_expr.codegen(vm, program)
 
       vm.asm "#{label}_end:"
     end
   end
 
   class Cond < SpecializedNode
-    def codegen(vm)
+    def codegen(vm, program)
       label = vm.gencondname
 
       condition_labels = @conditions.each_with_index.map { |cond, index|
@@ -1376,13 +1429,13 @@ module AST
         vm.asm "#{condition_labels[index]}:"
 
         if cond.is_a?(CondCondition)
-          cond.test.codegen(vm)
+          cond.test.codegen(vm, program)
 
           vm.asm "        cmp     $4, %rax"
           vm.asm "        je      #{condition_labels[index + 1]}"
 
           cond.expressions.each do |exp|
-            exp.codegen(vm)
+            exp.codegen(vm, program)
           end
 
           if index != @conditions.size - 1
@@ -1390,7 +1443,7 @@ module AST
           end
         elsif cond.is_a?(CondElse)
           cond.expressions.each do |exp|
-            exp.codegen(vm)
+            exp.codegen(vm, program)
           end
         end
       end
@@ -1400,7 +1453,7 @@ module AST
   end
 
   class Let < SpecializedNode
-    def codegen(vm)
+    def codegen(vm, program)
       vm.argframe
       vm.with_aligned_stack do
         vm.call "new_frame_with_parent"
@@ -1414,12 +1467,12 @@ module AST
         vm.push("%rax")
 
         case let_type
-        when :bare then add_bindings_bare(vm)
-        when :star then add_bindings_star(vm)
+        when :bare then add_bindings_bare(vm, program)
+        when :star then add_bindings_star(vm, program)
         end
 
         expressions.each do |expression|
-          expression.codegen(vm)
+          expression.codegen(vm, program)
         end
 
         vm.pop
@@ -1427,9 +1480,9 @@ module AST
       end
     end
 
-    def add_bindings_bare(vm)
+    def add_bindings_bare(vm, program)
       bindings.each do |binding|
-        binding.value.codegen(vm)
+        binding.value.codegen(vm, program)
         vm.push("%rax")
       end
 
@@ -1445,11 +1498,11 @@ module AST
       end
     end
 
-    def add_bindings_star(vm)
+    def add_bindings_star(vm, program)
       bindings.each do |binding|
         varname = vm.addvarname(binding.name)
 
-        binding.value.codegen(vm)
+        binding.value.codegen(vm, program)
 
         vm.argframe
         vm.movlabelreg varname, "%rsi"
