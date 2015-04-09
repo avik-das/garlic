@@ -59,13 +59,31 @@ cdecl(gather_varargs):
         # %rsp - return address to caller of gather_varargs
         #        stack frame pushed by scm_fncall
         #        return address to original caller of function
-        #        first argument to gather
+        #        first argument to original function
+        #
+        # The arguments to this function are:
+        #
+        # %rdi - number of required parameters for the original function
+        # %rsi - number of total arguments passed to the original function
+        #
+        # Thus, (%rsi - %rdi) is the number of parameters that need to be
+        # gathered.
 
-        mov     %rsi, %r8               # save the number of arguments
-        mov     %rsp, %r9               # save the stack pointer
-        add     $24, %r9                #   but start at the first argument
+        # Given N total arguments, we want to get to %rsp + 24 + ((N - 1) * 8).
+        # The (N - 1) part accounts for the fact that we want to be just below
+        # the last argument, not past it. With some algebraic manipulation, we
+        # get %rsp + 16 + (N * 8).
+        mov     %rsi, %r8               # take the total number of arguments
+        shlq    $3, %r8                 # multiply by 8 (# of bytes per arg)
+        mov     %rsp, %r9               # start at the top of the stack
+        add     $16, %r9                # move to the start of the first
+        add     %r8, %r9                #   argument put on the stack
+
+        mov     %rsi, %r8               # compute the number of arguments that
+        sub     %rdi, %r8               #   need to be gathered
+
         mov     $0, %rsi                # load nil as the last list element
-        mov     %r8, %r10               # %r8 will be used as the loop counter
+        mov     %rsi, %r10              # %rsi will be used to store the list
 gather_varargs_begin:                   #   so save the original value too
         cmp     $0, %r8                 # check that we have more arguments
         je      gather_varargs_done     # otherwise we're done
@@ -79,7 +97,7 @@ gather_varargs_begin:                   #   so save the original value too
         pop     %r10
         pop     %r9
         pop     %r8
-        add     $8, %r9                 # advance to the next argument
+        sub     $8, %r9                 # advance to the next argument
         sub     $1, %r8                 # we have one fewer argument to gather
         jmp     gather_varargs_begin    # loop
 gather_varargs_done:
@@ -89,6 +107,7 @@ gather_varargs_done:
 
 cdecl(stdlib_sum):
         # ignore the pushed frame
+        movq    $0, %rdi
         call    cdecl(gather_varargs)
         mov     %rax, %rdi
         call    cdecl(stdlib_impl_sum)
@@ -97,6 +116,7 @@ cdecl(stdlib_sum):
 
 cdecl(stdlib_difference):
         # ignore the pushed frame
+        movq    $0, %rdi
         call    cdecl(gather_varargs)
         mov     %rax, %rdi
         call    cdecl(stdlib_impl_difference)
@@ -105,6 +125,7 @@ cdecl(stdlib_difference):
 
 cdecl(stdlib_mul):
         # ignore the pushed frame
+        movq    $0, %rdi
         call    cdecl(gather_varargs)
         mov     %rax, %rdi
         call    cdecl(stdlib_impl_mul)
@@ -113,8 +134,8 @@ cdecl(stdlib_mul):
 
 cdecl(stdlib_cons):
         # ignore the pushed frame
-        mov     24(%rsp), %rdi
-        mov     16(%rsp), %rsi
+        mov     16(%rsp), %rdi
+        mov     24(%rsp), %rsi
         call    cdecl(make_cons)
         add     $8, %rsp
         ret
@@ -142,6 +163,7 @@ cdecl(stdlib_nullp):
 
 cdecl(stdlib_equal_sign):
         # ignore the pushed frame
+        movq    $0, %rdi
         call    cdecl(gather_varargs)
         mov     %rax, %rdi
         call    cdecl(stdlib_impl_equal_sign)

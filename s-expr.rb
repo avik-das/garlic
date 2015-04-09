@@ -1225,7 +1225,8 @@ module AST
         #    actually, because we still need the number gathered arguments).
         rest_varname = vm.addvarname(rest_param)
 
-        vm.asm "        sub     $#{params.size}, %rsi"
+        #vm.asm "        movq    %rsi, %rdi"
+        vm.asm "        movq    $#{params.size}, %rdi"
 
         vm.with_aligned_stack do
           vm.call "gather_varargs"
@@ -1247,17 +1248,7 @@ module AST
       vm.asm "        mov     %rsp, %r8"
       vm.asm "        add     $16, %r8"
 
-      if is_vararg
-        vm.asm "        mov     %rsi, %rax"
-        vm.asm "        shlq    $3, %rax"   # multiply by 8
-        vm.asm "        add     %rax, %r8"
-
-        # Now we can actually restore the number of total arguments passed to
-        # the lambda, should be we need it again.
-        vm.asm "        add     $#{params.size}, %rsi"
-      end
-
-      params.reverse.each do |param|
+      params.each do |param|
         varname = vm.addvarname(param)
 
         vm.argframe
@@ -1307,7 +1298,7 @@ module AST
       filtered_args = @args.reject { |arg| arg.is_a?(Comment) }
 
       vm.with_aligned_stack(filtered_args.size) do
-        filtered_args.each do |arg|
+        filtered_args.reverse.each do |arg|
           arg.codegen(vm)
           vm.push("%rax")
         end
