@@ -1,0 +1,13 @@
+loading stdlib...
+[stdlib-test] 3
+loading display-helpers...
+
+(3 3 4 5)
+
+(a b c d)
+[INFO] 1st message
+[INFO] 2nd message
+[INFO] 3rd message
+
+21
+6
