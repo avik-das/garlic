@@ -155,11 +155,11 @@ scm_value_t cleanup(scm_value_t s_ctx) {
 }
 
 scm_native_export_t sdl2_exports[] = {
-    {"init", init},
-    {"load-img", load_img},
-    {"show-img", show_img},
-    {"free-img", free_image},
-    {"main-loop", main_loop},
-    {"cleanup", cleanup},
+    {"init", init, 3},
+    {"load-img", load_img, 3},
+    {"show-img", show_img, 2},
+    {"free-img", free_image, 1},
+    {"main-loop", main_loop, 1},
+    {"cleanup", cleanup, 1},
     0
 };

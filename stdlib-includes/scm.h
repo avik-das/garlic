@@ -3,6 +3,7 @@
 typedef struct scm_native_export {
     char *name;
     void *fn;
+    unsigned int arity;
 } scm_native_export_t;
 
 typedef void * scm_value_t;

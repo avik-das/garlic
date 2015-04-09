@@ -5,6 +5,7 @@ require 'singleton'
 require 'digest/md5'
 require 'fileutils'
 require 'tempfile'
+require_relative 'c_parse'
 
 ## INITIAL PARSER ##############################################################
 
@@ -947,6 +948,11 @@ module AST
       wrapper_filename = VM::VM.output_filename(module_name)
       module_base_name = File.basename(module_name)
 
+      exports = CParser::parse_c_exports_from_string(
+        module_base_name,
+        File.read(filename)
+      )
+
       main_name = "init_#{wrapper_prefix}"
 
       asm "# MACROS: needed for cross-platform compatibility"
@@ -1003,21 +1009,56 @@ module AST
       asm ""
 
       asm "        movlabelreg(cdecl(#{module_base_name}_exports), %rax)"
-      asm "#{wrapper_prefix}_exports_loop:"
-      asm "        cmpq    $0, (%rax)"
-      asm "        je      #{wrapper_prefix}_exports_loop_done"
-      asm "        push    %rax"
-      asm "        movlabelreg(#{wrapper_prefix}_root_frame, %rdi)"
-      asm "        movq    (%rdi), %rdi"
-      asm "        movq    (%rax), %rsi"
-      asm "        movq    8(%rax), %rdx"
-      asm "        call    cdecl(add_native_function_to_frame)"
-      asm "        pop     %rax"
-      asm "        add     $16, %rax"
-      asm "        jmp     #{wrapper_prefix}_exports_loop"
-      asm "#{wrapper_prefix}_exports_loop_done:"
+      exports.each_with_index do |exp, i|
+        asm "        push    %rax"
+        asm "        movlabelreg(#{wrapper_prefix}_root_frame, %rdi)"
+        asm "        movq    (%rdi), %rdi"
+        asm "        movq    (%rax), %rsi"
+        asm "        movlabelreg(#{wrapper_prefix}_native_fn_#{i}, %rdx)"
+        asm "        call    cdecl(add_native_function_to_frame)"
+        asm "        pop     %rax"
+        asm "        add     $24, %rax"
+      end
 
       asm "        ret"
+      asm ""
+
+      exports.each_with_index do |exp, i|
+        asm "#{wrapper_prefix}_native_fn_#{i}:"
+
+        spill_onto_stack = exp.arity > ARG_REGS.size
+        num_args_in_reg = [exp.arity, ARG_REGS.size].min
+
+        (0...num_args_in_reg)
+          .map {|i| i * 8 + 16}
+          .zip(ARG_REGS)
+          .each do |offset, reg|
+            asm "        movq    #{offset}(%rsp), %#{reg}"
+          end
+
+        if spill_onto_stack
+          # %r12 is callee saved, so we'll be able to grab the current return
+          # address again after calling the native function
+          asm "        movq    8(%rsp), %r12"
+          asm "        add     $56, %rsp"
+        end
+
+        # remove the unnecessary stack frame that was allocated
+        asm "        add     $8, %rsp"
+
+        asm "        movlabelreg(cdecl(#{module_base_name}_exports), %rax)"
+        asm "        movq    #{i * 24 + 8}(%rax), %rax"
+
+        if spill_onto_stack
+          asm "        call    *%rax"
+
+          asm "        sub     $48, %rsp"
+          asm "        push    %r12"
+          asm "        ret"
+        else
+          asm "        jmp     *%rax"
+        end
+      end
       asm ""
 
       getter_name = VM::VM.getter_name_for_module(module_base_name)
