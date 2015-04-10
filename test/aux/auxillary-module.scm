@@ -11,5 +11,10 @@
   (display x)
   (newline))
 
+; By not exporting this method, it should not be callable from outside this
+; module.
+(define (private-method)
+  "this is a private method")
+
 (module-export
   auxillary-function)
