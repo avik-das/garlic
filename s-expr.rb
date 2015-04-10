@@ -121,7 +121,8 @@ module AST
   RequireSpec = Struct.new(
     :absolute_path,
     :basename,
-    :nickname
+    :nickname,
+    :star
   )
 
   class Program
@@ -212,7 +213,17 @@ module AST
 
         basename = File.basename(abs_path)
 
-        if exp.children.size == 4
+        if exp.children.size == 3
+          star_symbol = exp.children[2]
+
+          unless star_symbol.is_a?(Var) and star_symbol.name == :*
+            raise ParseException.new(
+              "invalid require qualifier: #{star_symbol}")
+          end
+
+          nickname = nil
+          star = true
+        elsif exp.children.size == 4
           arrow = exp.children[2]
           nickname = exp.children[3]
 
@@ -226,16 +237,55 @@ module AST
           end
 
           nickname = nickname.name
+          star = false
         else
           nickname = nil
+          star = false
         end
 
         RequireSpec.new(
           abs_path,
           basename,
-          nickname
+          nickname,
+          star
         )
       }
+    end
+
+    def compute_external_symbols_in_namespace(require_specs, all_modules)
+      fn_to_module = require_specs
+        .find_all(&:star)
+        .map(&:absolute_path)
+        .map { |path|
+          all_modules.find { |mod|
+            mod.module_name == path
+          }
+        }
+        .map { |mod|
+          mod
+            .ast
+            .module_exports
+            .map { |exp|
+              [exp, mod]
+            }
+        }
+        .flatten(1)
+
+      keys = fn_to_module
+        .map(&:first)
+
+      dups = keys
+        .find_all { |sym| keys.count(sym) > 1 }
+        .uniq
+
+      unless dups.empty?
+        raise SchemeModule::CompileException.new(
+          "multiple imported symbols with the same name: " + dups.join(", "))
+      end
+
+      # At this point, the keys are exported functions, and the values are
+      # the module from which they were exported.
+      @external_symbols_in_namespace = Hash[fn_to_module]
     end
 
     def gathered_exports(module_exports)
@@ -255,7 +305,8 @@ module AST
     attr_accessor :filename,
       :recursive_requires,
       :module_requires,
-      :module_exports
+      :module_exports,
+      :external_symbols_in_namespace
   end
 
   class CModule; end
@@ -947,6 +998,11 @@ module AST
         @module_exports
       )
 
+      compute_external_symbols_in_namespace(
+        module_requires,
+        all_modules
+      )
+
       @statements.each do |statement|
         statement.codegen(vm, self, all_modules)
       end
@@ -1175,9 +1231,6 @@ module AST
       if name.to_s.include?(":")
         module_prefix, internal_name = name.to_s.split(":")
 
-        varname = vm.addvarname(Var.new(internal_name))
-        vm.movlabelreg varname, "%rdi"
-
         require_spec = program
           .module_requires
           .find { |req|
@@ -1221,18 +1274,43 @@ module AST
               "\"#{internal_name}\"")
         end
 
-        vm.with_aligned_stack do
-          getter_name = VM::VM.getter_name_for_module(actual_module_prefix)
-          vm.call getter_name
-        end
+        load_external_symbol(vm, internal_name, actual_module_prefix)
       else
-        varname = vm.addvarname(self)
+        # NOTE: currently, we don't perform static checks to figure out what
+        # variables are in scope. So, if we don't see that a particular
+        # variable is imported from another module, we'll just generate the
+        # code to load the variable in the local scope.
+        #
+        # This unfortunately means, for the time being, that imported symbols
+        # take precedence over any local variables!
 
-        vm.argframe
-        vm.movlabelreg varname, "%rsi"
-        vm.with_aligned_stack do
-          vm.call "find_in_frame"
+        if program.external_symbols_in_namespace.has_key?(name)
+          module_prefix = File.basename(
+            program
+              .external_symbols_in_namespace[name]
+              .module_name
+          )
+
+          load_external_symbol(vm, name, module_prefix)
+        else
+          varname = vm.addvarname(self)
+
+          vm.argframe
+          vm.movlabelreg varname, "%rsi"
+          vm.with_aligned_stack do
+            vm.call "find_in_frame"
+          end
         end
+      end
+    end
+
+    def load_external_symbol(vm, symbol_name, module_prefix)
+      varname = vm.addvarname(Var.new(symbol_name))
+      vm.movlabelreg varname, "%rdi"
+
+      vm.with_aligned_stack do
+        getter_name = VM::VM.getter_name_for_module(module_prefix)
+        vm.call getter_name
       end
     end
   end
