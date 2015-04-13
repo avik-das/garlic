@@ -79,6 +79,23 @@ end
 ## AST GENERATION ##############################################################
 
 module AST
+  # The set of all variable names available in all lexical scopes throughout
+  # each program. These are added by stdlib.c.
+  GLOBAL_SYMBOLS = Set.new([
+    :+,
+    :-,
+    :*,
+
+    :cons,
+    :car,
+    :cdr,
+    :null?,
+    :'=',
+
+    :display,
+    :newline
+  ])
+
   class ParseException < Exception; end
 
   class SchemeModule
@@ -116,6 +133,13 @@ module AST
 
       defines + others
     end
+
+    def def_names_from_statements(statements)
+      statements
+        .find_all { |s| s.is_a?(Definition) }
+        .map(&:name)
+        .map(&:name)
+    end
   end
 
   RequireSpec = Struct.new(
@@ -139,6 +163,8 @@ module AST
       @statements, module_exports = separated_module_exports(@statements)
       @statements = @statements.map(&:static_transformed)
       @statements = with_hoisted_definitions(@statements)
+
+      compute_names_in_scope
 
       @module_requires = gathered_requires(module_requires)
       @recursive_requires = recursive_require_modules(@module_requires)
@@ -297,6 +323,17 @@ module AST
       }.flatten
     end
 
+    def compute_names_in_scope
+      def_names = def_names_from_statements(@statements)
+
+      @names_in_scope = Set.new(GLOBAL_SYMBOLS)
+      @names_in_scope.merge(def_names)
+
+      @statements.each do |statement|
+        statement.compute_names_in_scope(@names_in_scope)
+      end
+    end
+
     def to_s
       @statements.join("\n")
     end
@@ -323,6 +360,18 @@ module AST
     def specialized_quoted
       self
     end
+
+    def compute_names_in_scope(parent_names)
+      @names_in_scope = parent_names
+
+      if has_children?
+        children.each do |child|
+          child.compute_names_in_scope(@names_in_scope)
+        end
+      end
+    end
+
+    attr_accessor :names_in_scope
   end
 
   class Comment < Node
@@ -670,6 +719,13 @@ module AST
       self
     end
 
+    def compute_names_in_scope(parent_names)
+      @names_in_scope = parent_names
+
+      @name.compute_names_in_scope(@names_in_scope)
+      @value.compute_names_in_scope(@names_in_scope)
+    end
+
     def to_s
       "(\033[#{self.internal_color}mdefine\033[0m " +
         "\033[1m#{@name}\033[0m #{@value})"
@@ -733,6 +789,28 @@ module AST
       self
     end
 
+    def compute_names_in_scope(parent_names)
+      @names_in_scope = parent_names
+
+      @params.each do |param|
+        param.compute_names_in_scope(@names_in_scope)
+      end
+      @rest_param.compute_names_in_scope(@names_in_scope) if @rest_param
+
+      param_names = @params.map(&:name)
+      param_names << @rest_param.name if @rest_param
+
+      body_def_names = def_names_from_statements(@body_statements)
+
+      names_in_body_scope = Set.new(@names_in_scope)
+      names_in_body_scope.merge(param_names)
+      names_in_body_scope.merge(body_def_names)
+
+      @body_statements.each do |statement|
+        statement.compute_names_in_scope(names_in_body_scope)
+      end
+    end
+
     def to_s
       "(\033[#{self.internal_color}mlambda\033[0m " +
         "(\033[1m#{@params.join(" ")}\033[0m)\n" +
@@ -757,6 +835,15 @@ module AST
       @args = @args.map(&:static_transformed)
 
       self
+    end
+
+    def compute_names_in_scope(parent_names)
+      @names_in_scope = parent_names
+
+      @func.compute_names_in_scope(@names_in_scope)
+      @args.each do |arg|
+        arg.compute_names_in_scope(@names_in_scope)
+      end
     end
 
     def to_s
@@ -793,6 +880,14 @@ module AST
       @false_expr = @children[3].static_transformed
 
       self
+    end
+
+    def compute_names_in_scope(parent_names)
+      @names_in_scope = parent_names
+
+      @cond.compute_names_in_scope(@names_in_scope)
+      @true_expr.compute_names_in_scope(@names_in_scope)
+      @false_expr.compute_names_in_scope(@names_in_scope)
     end
 
     def to_s
@@ -856,6 +951,14 @@ module AST
       self
     end
 
+    def compute_names_in_scope(parent_names)
+      @names_in_scope = parent_names
+
+      @conditions.each do |cond|
+        cond.compute_names_in_scope(@names_in_scope)
+      end
+    end
+
     attr :conditions
   end
 
@@ -865,12 +968,29 @@ module AST
       @expressions = expressions
     end
 
+    def compute_names_in_scope(parent_names)
+      @names_in_scope = parent_names
+
+      @test.compute_names_in_scope(@names_in_scope)
+      @expressions.each do |exp|
+        exp.compute_names_in_scope(@names_in_scope)
+      end
+    end
+
     attr :test, :expressions
   end
 
   class CondElse < SpecializedNode
     def initialize(expressions)
       @expressions = expressions
+    end
+
+    def compute_names_in_scope(parent_names)
+      @names_in_scope = parent_names
+
+      @expressions.each do |exp|
+        exp.compute_names_in_scope(@names_in_scope)
+      end
     end
 
     attr :expressions
@@ -925,6 +1045,29 @@ module AST
       self
     end
 
+    def compute_names_in_scope(parent_names)
+      @names_in_scope = Set.new(parent_names)
+
+      # TODO: This is where we can vary which bindings get access to which
+      # other bindings in order to enforce let vs. let* vs letrec semantics.
+      # For now, assume that all bindings are available all throughout the
+      # let's sub-expressions for simplicity.
+      binding_names = @bindings.map(&:name).map(&:name)
+      @names_in_scope.merge(binding_names)
+
+      body_def_names = def_names_from_statements(@expressions)
+      names_in_body_scope = Set.new(@names_in_scope)
+      names_in_body_scope.merge(body_def_names)
+
+      @bindings.each do |binding|
+        binding.compute_names_in_scope(@names_in_scope)
+      end
+
+      @expressions.each do |exp|
+        exp.compute_names_in_scope(names_in_body_scope)
+      end
+    end
+
     attr :let_type, :bindings, :expressions
   end
 
@@ -932,6 +1075,13 @@ module AST
     def initialize(name, value)
       @name = name
       @value = value
+    end
+
+    def compute_names_in_scope(parent_names)
+      @names_in_scope = parent_names
+
+      @name.compute_names_in_scope(@names_in_scope)
+      @value.compute_names_in_scope(@names_in_scope)
     end
 
     attr :name, :value
@@ -1276,15 +1426,15 @@ module AST
 
         load_external_symbol(vm, internal_name, actual_module_prefix)
       else
-        # NOTE: currently, we don't perform static checks to figure out what
-        # variables are in scope. So, if we don't see that a particular
-        # variable is imported from another module, we'll just generate the
-        # code to load the variable in the local scope.
-        #
-        # This unfortunately means, for the time being, that imported symbols
-        # take precedence over any local variables!
+        if @names_in_scope.include?(name)
+          varname = vm.addvarname(self)
 
-        if program.external_symbols_in_namespace.has_key?(name)
+          vm.argframe
+          vm.movlabelreg varname, "%rsi"
+          vm.with_aligned_stack do
+            vm.call "find_in_frame"
+          end
+        elsif program.external_symbols_in_namespace.has_key?(name)
           module_prefix = File.basename(
             program
               .external_symbols_in_namespace[name]
@@ -1293,13 +1443,8 @@ module AST
 
           load_external_symbol(vm, name, module_prefix)
         else
-          varname = vm.addvarname(self)
-
-          vm.argframe
-          vm.movlabelreg varname, "%rsi"
-          vm.with_aligned_stack do
-            vm.call "find_in_frame"
-          end
+          raise SchemeModule::CompileException.new(
+            "undefined variable referenced: #{name}")
         end
       end
     end
