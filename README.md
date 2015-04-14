@@ -12,7 +12,7 @@ Quick Start
 git clone https://github.com/avik-das/scheme-compiler.git
 cd scheme-compiler
 bundle install
-./s-expr.rb test.scm
+./s-expr.rb test/success/full.scm
 ./main
 ```
 
