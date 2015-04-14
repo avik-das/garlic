@@ -551,7 +551,10 @@ module AST
 
     def static_transformed
       if @children.empty?
-        self # TODO
+        # The only time an empty list is valid is when it's quoted, i.e. when
+        # it represents "nil". If that's the case, it will be handled by
+        # "specialized_quoted", not by "static_transformed".
+        raise ParseException.new("empty list is invalid without quoting")
       else
         first = @children.first
         first_is_var = first.is_a?(Var)
