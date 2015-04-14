@@ -10,6 +10,12 @@
 (display a) (newline)
 (display c) (newline)
 
+; The current binding should be available in its own definition in order to
+; allow for recursion.
+(display
+  (let* ((fac (lambda (n) (if (= n 0) 1 (* n (fac (- n 1))) )) ))
+    (fac 5)) ) (newline)
+
 ; Again, we hoist definitions inside the let* body, as well as multiple
 ; statements.
 

@@ -45,9 +45,7 @@ rm -f test/tmp
 
 num_success_tests=`ls -1 test/success/*.scm | wc -l`
 num_failure_compile_tests=`ls -1 test/failure-compile/*.scm | wc -l`
-num_failure_runtime_tests=`ls -1 test/failure-runtime/*.scm | wc -l`
-num_total_tests=`expr $num_success_tests + \
-    $num_failure_compile_tests + $num_failure_runtime_tests`
+num_total_tests=`expr $num_success_tests + $num_failure_compile_tests`
 
 log_info "Running $num_total_tests functional tests"
 echo
@@ -100,31 +98,6 @@ for testfile in test/failure-compile/*.scm; do
     if [ $? -eq 0 ]; then
         echo
         fail "Compiling \"$testfile\" unexpectedly succeeded"
-    fi
-
-    clear_line
-done
-
-for testfile in test/failure-runtime/*.scm; do
-    log_info_clearable "Running \"$testfile\"..."
-
-    ./s-expr.rb "$testfile" > test/tmp.result 2>&1
-
-    if [ $? -ne 0 ]; then
-        echo
-        echo
-        cat test/tmp.result
-
-        fail "Compiling \"$testfile\" failed"
-        echo
-        continue
-    fi
-
-    ./main > test/tmp.result
-
-    if [ $? -eq 0 ]; then
-        echo
-        fail "Running \"$testfile\" unexpectedly succeeded"
     fi
 
     clear_line

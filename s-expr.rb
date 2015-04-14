@@ -567,6 +567,8 @@ module AST
               Let.new(:bare, *filtered_children)
             when :'let*'
               Let.new(:star, *filtered_children)
+            when :letrec
+              Let.new(:rec, *filtered_children)
             else
               as_function_call
             end
@@ -1048,23 +1050,62 @@ module AST
     def compute_names_in_scope(parent_names)
       @names_in_scope = Set.new(parent_names)
 
-      # TODO: This is where we can vary which bindings get access to which
-      # other bindings in order to enforce let vs. let* vs letrec semantics.
-      # For now, assume that all bindings are available all throughout the
-      # let's sub-expressions for simplicity.
-      binding_names = @bindings.map(&:name).map(&:name)
-      @names_in_scope.merge(binding_names)
+      case @let_type
+      when :bare then compute_names_in_let_binding_scopes(@names_in_scope)
+      when :star then compute_names_in_let_star_binding_scopes(@names_in_scope)
+      when :rec  then compute_names_in_letrec_binding_scopes(@names_in_scope)
+      end
 
+      binding_names = @bindings
+        .map(&:name)
+        .map(&:name)
       body_def_names = def_names_from_statements(@expressions)
       names_in_body_scope = Set.new(@names_in_scope)
+      names_in_body_scope.merge(binding_names)
       names_in_body_scope.merge(body_def_names)
-
-      @bindings.each do |binding|
-        binding.compute_names_in_scope(@names_in_scope)
-      end
 
       @expressions.each do |exp|
         exp.compute_names_in_scope(names_in_body_scope)
+      end
+    end
+
+    def compute_names_in_let_binding_scopes(parent_names)
+      # Within the bindings in a "let" block, none of the binding names are
+      # visible to other bindings. Only the current bound name is available
+      # within the definition of the binding in order to allow for recursion.
+      @bindings.each do |binding|
+        binding_name = binding.name.name
+        names_in_binding_scope = parent_names + [binding_name]
+
+        binding.compute_names_in_scope(names_in_binding_scope)
+      end
+    end
+
+    def compute_names_in_let_star_binding_scopes(parent_names)
+      # Within the bindings in a "let*" block, each binding name is visible to
+      # its own definition and subsequent definitions.
+      names_in_binding_scope = Set.new(parent_names)
+
+      @bindings.each do |binding|
+        binding_name = binding.name.name
+        names_in_binding_scope << binding_name
+
+        binding.compute_names_in_scope(names_in_binding_scope)
+      end
+    end
+
+    def compute_names_in_letrec_binding_scopes(parent_names)
+      # Within the bindings in a "letrec" block, all binding names are visible
+      # to all bindings, including itself.
+      names_in_binding_scope = Set.new(parent_names)
+
+      binding_names = @bindings
+        .map(&:name)
+        .map(&:name)
+      names_in_binding_scope.merge(binding_names)
+
+      @bindings.each do |binding|
+        binding.compute_names_in_scope(names_in_binding_scope)
       end
     end
 
@@ -1717,9 +1758,22 @@ module AST
         vm.new_empty_frame
         vm.push("%rax")
 
-        case let_type
-        when :bare then add_bindings_bare(vm, program, all_modules)
-        when :star then add_bindings_star(vm, program, all_modules)
+        # It's possible to allow for let and let* semantics by varying the
+        # way the bindings are actually evaluated. However, static analysis is
+        # sufficient to enforce the correct semantics, so during code
+        # generation, we can use the most efficient code, which is to just
+        # evaluate the bindings in order and add them to new frame.
+        bindings.each do |binding|
+          varname = vm.addvarname(binding.name)
+
+          binding.value.codegen(vm, program, all_modules)
+
+          vm.argframe
+          vm.movlabelreg varname, "%rsi"
+          vm.asm "        mov     %rax, %rdx"
+          vm.with_aligned_stack do
+            vm.call "add_to_frame"
+          end
         end
 
         expressions.each do |expression|
@@ -1728,39 +1782,6 @@ module AST
 
         vm.pop
         vm.remframe
-      end
-    end
-
-    def add_bindings_bare(vm, program, all_modules)
-      bindings.each do |binding|
-        binding.value.codegen(vm, program, all_modules)
-        vm.push("%rax")
-      end
-
-      bindings.reverse.each do |binding|
-        varname = vm.addvarname(binding.name)
-
-        vm.argframe
-        vm.movlabelreg varname, "%rsi"
-        vm.pop("%rdx")
-        vm.with_aligned_stack do
-          vm.call "add_to_frame"
-        end
-      end
-    end
-
-    def add_bindings_star(vm, program, all_modules)
-      bindings.each do |binding|
-        varname = vm.addvarname(binding.name)
-
-        binding.value.codegen(vm, program, all_modules)
-
-        vm.argframe
-        vm.movlabelreg varname, "%rsi"
-        vm.asm "        mov     %rax, %rdx"
-        vm.with_aligned_stack do
-          vm.call "add_to_frame"
-        end
       end
     end
   end
