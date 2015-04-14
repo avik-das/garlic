@@ -346,7 +346,21 @@ module AST
       :external_symbols_in_namespace
   end
 
-  class CModule; end
+  class CModule
+    def initialize(filename, module_name)
+      module_base_name = File.basename(module_name)
+      @c_exports = CParser::parse_c_exports_from_string(
+        module_base_name,
+        File.read(filename)
+      )
+
+      @module_exports = @c_exports
+        .map(&:name)
+        .map(&:intern)
+    end
+
+    attr_accessor :module_exports
+  end
 
   class Node
     def has_children?
@@ -1210,11 +1224,6 @@ module AST
       wrapper_filename = VM::VM.output_filename(module_name)
       module_base_name = File.basename(module_name)
 
-      exports = CParser::parse_c_exports_from_string(
-        module_base_name,
-        File.read(filename)
-      )
-
       main_name = "init_#{wrapper_prefix}"
 
       asm "# MACROS: needed for cross-platform compatibility"
@@ -1271,7 +1280,7 @@ module AST
       asm ""
 
       asm "        movlabelreg(cdecl(#{module_base_name}_exports), %rax)"
-      exports.each_with_index do |exp, i|
+      @c_exports.each_with_index do |exp, i|
         asm "        push    %rax"
         asm "        movlabelreg(#{wrapper_prefix}_root_frame, %rdi)"
         asm "        movq    (%rdi), %rdi"
@@ -1285,7 +1294,7 @@ module AST
       asm "        ret"
       asm ""
 
-      exports.each_with_index do |exp, i|
+      @c_exports.each_with_index do |exp, i|
         asm "#{wrapper_prefix}_native_fn_#{i}:"
 
         spill_onto_stack = exp.arity > ARG_REGS.size
@@ -1453,13 +1462,7 @@ module AST
               "#{require_spec.absolute_path}")
         end
 
-        # NOTE: this deliberately ignores checking C modules, but because of
-        # the way bindings are created for C modules, this should still
-        # continue failing at runtime. However, it might be possible to do some
-        # static checking as long as the exports are parsed out from the C
-        # module code.
-        unless child_program.module_type != SchemeModule::MODULE_TYPE_SCM or
-          child_program.ast.module_exports.include?(internal_name.intern)
+        unless child_program.ast.module_exports.include?(internal_name.intern)
           raise SchemeModule::CompileException.new(
             "module \"#{module_prefix}\" does not export symbol " +
               "\"#{internal_name}\"")
@@ -2216,7 +2219,7 @@ def gather_asts(filename,
       child_modules
     )
   when AST::SchemeModule::MODULE_TYPE_C
-    ast = AST::CModule.new
+    ast = AST::CModule.new(filename, module_name)
 
     AST::SchemeModule.new(
       filename,

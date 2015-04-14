@@ -1,11 +1,19 @@
 #include <stdio.h>
 #include <scm.h>
 
+// This function will not be included as part of the exports, so it will not be
+// accessible outside this module.
+scm_value_t private_identity(scm_value_t input) {
+    return input;
+}
+
 scm_value_t add(scm_value_t a, scm_value_t b) {
     printf("Adding %" PRId64 " and %" PRId64 " in C!\n",
             SCMVALUE_TO_INT(a), SCMVALUE_TO_INT(b));
 
-    return INT_TO_SCMVALUE(SCMVALUE_TO_INT(a) + SCMVALUE_TO_INT(b));
+    return private_identity(
+            INT_TO_SCMVALUE(SCMVALUE_TO_INT(a) + SCMVALUE_TO_INT(b))
+            );
 }
 
 scm_value_t lastarg12(
