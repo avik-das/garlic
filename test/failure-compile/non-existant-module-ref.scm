@@ -1,1 +1,1 @@
-(stdlib:list 1 2 3)
+(display-helpers:display-with-tag "INFO" "hello")

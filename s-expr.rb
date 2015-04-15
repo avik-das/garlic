@@ -156,7 +156,25 @@ module AST
       @statements = statements
     end
 
+    # The standard library file is handled slightly differently than the other
+    # modules. In particular, other modules implicitly import everything from
+    # stdlib, but the stdlib module shouldn't do that!
+    def is_stdlib
+      filename == stdlib_filename
+    end
+
     def static_transformed(included_modules)
+      unless is_stdlib
+        # (require stdlib *)
+        @statements.unshift(
+          NestedNode.new(
+            Var.new(:require),
+            Var.new(:stdlib),
+            Var.new(:*)
+          )
+        )
+      end
+
       @included_modules = included_modules
 
       @statements, module_requires = separated_module_requires(@statements)
@@ -2268,6 +2286,10 @@ end
 
 def includes_dir
   "#{compiler_dir}/stdlib-includes"
+end
+
+def stdlib_filename
+  "#{includes_dir}/stdlib.scm"
 end
 
 def absolute_path_for_module(relative_path, basedir = nil)

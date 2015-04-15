@@ -240,14 +240,11 @@
 
 (newline)
 
-(require stdlib)
 (require display-helpers => disp)
 
-; Some of these functions have the same name as ones defined in this file, but
-; there is no conflict due to namespacing.
-(display (stdlib:length '(a b c d))) (newline)
-(display (stdlib:map (lambda (x) (+ 1 x)) '(1 2 3 4))) (newline)
-(display (stdlib:reject null? '(1 '() 3 '()))) (newline)
+(display (length '(a b c d))) (newline)
+(display (map (lambda (x) (+ 1 x)) '(1 2 3 4))) (newline)
+(display (reject null? '(1 '() 3 '()))) (newline)
 
 (newline)
 
@@ -285,7 +282,7 @@
 
 (newline)
 
-(display (stdlib:list 'a 'b 'c 'd)) (newline)
+(display (list 'a 'b 'c 'd)) (newline)
 (disp:display-all-with-tag "INFO"
                            "1st message"
                            "2nd message"
@@ -297,12 +294,12 @@
 (display
   ((lambda (x y . z)
      (+ (* x y)
-        (stdlib:sum z)) ) 2 3 4 5 6) ) (newline)
+        (sum z)) ) 2 3 4 5 6) ) (newline)
 
 ; Note that because lambdas have no names, the syntax to specify no positional
 ; arguments is a little different: you have to specify the entire argument list
 ; as a single variable, not a list.
-(display ((lambda ls (stdlib:sum ls)) 1 2 3)) (newline)
+(display ((lambda ls (sum ls)) 1 2 3)) (newline)
 
 (newline)
 

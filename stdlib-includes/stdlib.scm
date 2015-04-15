@@ -1,6 +1,3 @@
-(display "loading stdlib...")
-(newline)
-
 (define (not val)
         (if val #f #t))
 
@@ -50,9 +47,6 @@
   (lambda (x) (f (g x))) )
 
 (define (list . x) x)
-
-(display "[stdlib-test] ")
-(display (length '(1 2 3))) (newline)
 
 (module-export
   not

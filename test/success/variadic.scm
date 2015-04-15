@@ -1,4 +1,3 @@
-(require stdlib)
 (require display-helpers)
 
 (newline)
@@ -8,7 +7,7 @@
 
 (newline)
 
-(display (stdlib:list 'a 'b 'c 'd)) (newline)
+(display (list 'a 'b 'c 'd)) (newline)
 (display-helpers:display-all-with-tag "INFO"
                                       "1st message"
                                       "2nd message"
@@ -20,9 +19,9 @@
 (display
   ((lambda (x y . z)
      (+ (* x y)
-        (stdlib:sum z)) ) 2 3 4 5 6) ) (newline)
+        (sum z)) ) 2 3 4 5 6) ) (newline)
 
 ; Note that because lambdas have no names, the syntax to specify no positional
 ; arguments is a little different: you have to specify the entire argument list
 ; as a single variable, not a list.
-(display ((lambda ls (stdlib:sum ls)) 1 2 3)) (newline)
+(display ((lambda ls (sum ls)) 1 2 3)) (newline)

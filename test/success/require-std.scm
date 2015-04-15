@@ -1,4 +1,4 @@
-(require stdlib)
+; TODO
+(require display-helpers)
 
-(display (stdlib:length '(2 3 4 5)))
-(newline)
+(display-helpers:display-with-tag "INFO" "hello")

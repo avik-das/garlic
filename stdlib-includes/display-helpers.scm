@@ -1,5 +1,3 @@
-(require stdlib)
-
 (display "loading display-helpers...")
 (newline)
 
@@ -11,11 +9,11 @@
   (newline))
 
 (define (display-all-with-tag tag . messages)
-  (stdlib:foreach (lambda (msg) (display-with-tag tag msg)) messages) )
+  (foreach (lambda (msg) (display-with-tag tag msg)) messages) )
 
 (define (display-non-null messages)
-  (stdlib:foreach (lambda (msg) (display msg) (newline))
-           (stdlib:filter (stdlib:compose stdlib:not null?) messages)) )
+  (foreach (lambda (msg) (display msg) (newline))
+           (filter (compose not null?) messages)) )
 
 (module-export
   display-with-tag
