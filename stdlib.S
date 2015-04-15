@@ -20,7 +20,6 @@
          .global cdecl(stdlib_equal_sign)
 
          .global cdecl(stdlib_display)
-         .global cdecl(stdlib_newline)
 
          .global cdecl(value_to_native_int)
 
@@ -174,12 +173,6 @@ cdecl(stdlib_display):
         # ignore the pushed frame
         mov     16(%rsp), %rdi
         call    cdecl(stdlib_impl_display)
-        add     $8, %rsp
-        ret
-
-cdecl(stdlib_newline):
-        # ignore the pushed frame
-        call    cdecl(stdlib_impl_newline)
         add     $8, %rsp
         ret
 

@@ -1,3 +1,6 @@
+(define (newline)
+  (display "\n"))
+
 (define (not val)
         (if val #f #t))
 
@@ -49,6 +52,7 @@
 (define (list . x) x)
 
 (module-export
+  newline
   not
   length
   map

@@ -92,8 +92,7 @@ module AST
     :null?,
     :'=',
 
-    :display,
-    :newline
+    :display
   ])
 
   class ParseException < Exception; end

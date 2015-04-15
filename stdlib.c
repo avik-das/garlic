@@ -21,7 +21,6 @@ scm_value_t stdlib_nullp(scm_value_t value);
 scm_value_t stdlib_equal_sign(scm_value_t vals);
 
 scm_value_t stdlib_display(scm_value_t value);
-scm_value_t stdlib_newline();
 
 scm_value_t stdlib_impl_sum(scm_value_t vals);
 scm_value_t stdlib_impl_difference(scm_value_t vals);
@@ -29,7 +28,6 @@ scm_value_t stdlib_impl_mul(scm_value_t vals);
 scm_value_t stdlib_impl_nullp(scm_value_t value);
 scm_value_t stdlib_impl_equal_sign(scm_value_t vals);
 scm_value_t stdlib_impl_display(scm_value_t value);
-scm_value_t stdlib_impl_newline();
 
 int64_t value_to_native_int(scm_value_t value);
 
@@ -100,7 +98,6 @@ struct frame_t * new_root_frame() {
     add_to_frame(frame, "=", make_fn(frame, stdlib_equal_sign, 0));
 
     add_to_frame(frame, "display", make_fn(frame, stdlib_display, 0));
-    add_to_frame(frame, "newline", make_fn(frame, stdlib_newline, 0));
 
     return frame;
 }
@@ -434,11 +431,6 @@ scm_value_t stdlib_impl_display(scm_value_t value) {
                 ((struct scm_wrapped_native *) value)->native_val);
     }
 
-    return NIL_VALUE;
-}
-
-scm_value_t stdlib_impl_newline() {
-    printf("\n");
     return NIL_VALUE;
 }
 
