@@ -984,6 +984,10 @@ module AST
         end
       }
 
+      if !@conditions.last.is_a?(CondElse)
+        @conditions << CondElse.new([Nil.instance])
+      end
+
       self
     end
 
