@@ -113,8 +113,8 @@
 
 ;; Booleans and onditionals.
 
-(define not
-        (lambda (val) (if val #f #t)))
+(define my-not
+  (lambda (val) (if val #f #t)))
 
 (display #t) (newline)
 (display #f) (newline)
@@ -123,14 +123,14 @@
 (display (if '() 'correct 'wrong)) (newline)
 (display (if 0 'correct 'wrong)) (newline)
 (display (if 1 'correct 'wrong)) (newline)
-(display (if (not #f) 'correct 'wrong)) (newline)
-(display (if (not #t) 'wrong 'correct)) (newline)
-(display (if (not 0) 'wrong 'correct)) (newline)
-(display (if (not 1) 'wrong 'correct)) (newline)
+(display (if (my-not #f) 'correct 'wrong)) (newline)
+(display (if (my-not #t) 'wrong 'correct)) (newline)
+(display (if (my-not 0) 'wrong 'correct)) (newline)
+(display (if (my-not 1) 'wrong 'correct)) (newline)
 (display (= 1 1)) (newline)
 (display (= 2 2 (+ 1 1))) (newline)
-(display (not (= 1 2))) (newline)
-(display (not (= 1 1 2))) (newline)
+(display (my-not (= 1 2))) (newline)
+(display (my-not (= 1 1 2))) (newline)
 
 (newline)
 
