@@ -135,6 +135,43 @@ Note that if non-`nil` terminated `cons` cell is desired, it can be expressed as
 (cons 1 2)
 ```
 
+### Conditionals
+
+Use an `if` expression to conditionally evaluate one of two statements. An `if` expression has three parts: a condition, an expression to evaluate if the condition is "true-like" and an expression to evaluate otherwise. Note that _any_ value other than `#f` is considered "true-like," even `nil` and `0`.
+
+```scheme
+(define my-not
+  (lambda (val) (if val #f #t)))
+
+; all of the below will evaluate to 'correct
+(if #t 'correct 'wrong)
+(if #f 'wrong 'correct)
+(if '() 'correct 'wrong) ; nil is truthy
+(if 0 'correct 'wrong)   ; 0 is truthy
+(if 1 'correct 'wrong)
+(if (my-not #f) 'correct 'wrong)
+(if (my-not #t) 'wrong 'correct)
+(if (my-not 0) 'wrong 'correct)
+(if (my-not 1) 'wrong 'correct)
+```
+
+To evaluate a chain of conditions, `if` expressions must be nested in the "else" expressions. Alternatively, you can use a `cond` expression, which allows for a series of conditions and associated expressions to evaluate.
+
+```scheme
+(define (to-word n)
+  (cond ((= n 1) 'one)
+        ((= n 2) 'two)
+        ((= n 3) 'three)
+        (else 'unknown)))
+
+(to-word 1) ; one
+(to-word 2) ; two
+(to-word 3) ; three
+(to-word 4) ; unknown
+```
+
+The `else` clause is optional. However, if there is no `else` clause and no clause matches, then the `cond` expression evaluates to `nil`.
+
 ### Functions
 
 The fundamental means of abstraction in garlic is the lambda, a way of defining a function that can be called later.
@@ -239,9 +276,57 @@ Note that anonymous `lambda`s support variable numbers of arguments as well, tho
 
 ### Local variable bindings
 
-* let
-* let\*
-* letrec
+Functions are convenient because they provide variable bindings that are visible only in a limited scope. `let` bindings provide the same benefit without the overhead of defining and calling a function.
+
+The basic facility for local variable bindings is the `let` block. It takes a list of pairs, where the first element is an identifier and the second is an expression that evaluates to its value. These bindings are followed by a list of statements in which the bound variables are visible. Again, definitions within this block are hoisted to the top.
+
+```scheme
+(define a 1) ; accessible inside the let block
+(define b 2) ; will be shadowed by a let binding
+(define c 3) ; will be shadowed by a let binding
+(define f 4) ; will be shadowed by define
+
+(let ((b 5)
+      (c 6)
+      (d 7))
+  (+ a b c d e f) ; 1 + 5 + 6 + 7 + 8 + 9 = 36
+  (define e 8)
+  (define f 9))
+
+a ; 1
+b ; 2
+c ; 3
+f ; 4
+
+; d and e are not visible here
+```
+
+It's important to note that within the list of bindings, one bound expression cannot refer to any of the other bound variables. In essense, all the binding values are computed, and all the bindings are then created simultaneously.
+
+One alternative is `let*`, which executes the bindings in sequential order, allowing one expression to refer to the previous bindings. However, previous bindings can't refer to later ones.
+
+```scheme
+; Not possible using "let"
+(let* ((a 1)
+       (b (+ 1 a))
+       (c (+ a b)))
+  c) ; 1 + 2 = 3
+```
+
+Finally, there is `letrec`, which makes all bindings available immediately. Note that _initialization_ of the bindings still happens in sequential order, so it's not possible to use the values of later bindings immediately. However, one binding may _refer_ to a later binding in a delayed context, such as a `lambda`. This allows for mutual recursion.
+
+```scheme
+; This example is adapted from the Racket language documentation.
+(letrec ((is-even? (lambda (x)
+                     (if (= x 0)
+                       #t
+                       (is-odd? (- x 1))) ))
+         (is-odd? (lambda (x)
+                    (if (= x 0)
+                      #f
+                      (is-even? (- x 1))) )))
+  (is-odd? 11)) ; #t
+```
 
 ### Modules
 
@@ -284,12 +369,57 @@ There are a few modules are part of the standard library, such as `display-helpe
 ; [INFO] display-with-tag
 ```
 
- - module initialization
- - cyclical dependencies
- - renaming
- - import all
-   - original name
- - stdlib
+`require` statements can only appear at the top level of a file, so it's not possible to conditionally import a module at run time.
+
+When importing a module, a different module name can be chosen to represent it in the scope of the file using the renaming syntax. Typically, this is done to shorten the name of the module within the scope of file that depends on it.
+
+```scheme
+(require "my-module" => mm)
+
+(mm:f 2) ; -> 3
+(mm:g 2) ; -> 7
+```
+
+Once a module is imported using the renaming syntax, it is an error to prefix any identifiers with the original name. This is to avoid polluting the namespace with too many module names.
+
+The module name prefix can be completely eliminated by using the "import all" syntax, after which all identifiers in the imported module become part of the current namespace.
+
+```scheme
+(require "my-module" *)
+
+(f 2) ; -> 3
+(g 2) ; -> 7
+```
+
+When importing using this syntax, it is still possible to refer to identifiers in the imported module using the original module name. This is to disambiguate in the case of a local definition shadowing one that was imported into the local namespace.
+
+```scheme
+(require "my-module" *)
+
+(define (f n)
+  (* n 2))
+
+(f 2) ; -> 4, using the local function
+(g 2) ; -> 7, using the imported function
+
+(my-module:f 2) ; -> 3, using the imported function
+(my-module:g 2) ; -> 7, using the imported function
+```
+
+In any program, it can be assumed that an implitic `(require stdlib *)` is present at the top of all modules. This means any functions defined in the standard library are available without any prefixing in all modules. As a consequence of using the "import all" version of the import, it is also possible to refer to standard library functions using the `stdlib` prefix. Again, this is useful if a local definition shadows a standard library definition.
+
+```stdlib
+; notice the lack of an stdlib import
+
+(not #t)
+(stdlib:not #t)
+```
+
+It's possible for two modules to depend on each other, forming cycles in a prograam's dependency graph. This can be used for mutual recursion, but in general, such closely related functions should be defined in one module.
+
+Any top-level statements in a module are considered part of the module's initialization routine. All modules required by a program are initialized exactly once at the start of the program's execution, regardless of where in the importing file it was imported.
+
+The order of module initialization is undefined, except that a module will always be initialized before any module that depends on it. The exception is in the case of cyclical dependencies where the order is again undefined.
 
 ### Foreign-function interface
 
