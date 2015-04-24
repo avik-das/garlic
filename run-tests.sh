@@ -38,7 +38,7 @@ fail() {
 
 log_info "Running unit tests"
 echo
-ruby test/rb/test_master.rb
+rspec test/rb
 echo
 
 rm -f test/tmp
