@@ -53,7 +53,7 @@ echo
 for testfile in test/success/*.scm; do
     log_info_clearable "Running \"$testfile\"..."
 
-    ./s-expr.rb "$testfile" > test/tmp.result 2>&1
+    ./garlic "$testfile" > test/tmp.result 2>&1
 
     if [ $? -ne 0 ]; then
         echo
@@ -93,7 +93,7 @@ done
 for testfile in test/failure-compile/*.scm; do
     log_info_clearable "Running \"$testfile\"..."
 
-    ./s-expr.rb "$testfile" > test/tmp.result 2>&1
+    ./garlic "$testfile" > test/tmp.result 2>&1
 
     if [ $? -eq 0 ]; then
         echo

@@ -7,7 +7,7 @@ CFLAGS = -lSDL2 -lSDL2_image
 endif
 
 marley: marley.scm
-	../s-expr.rb -o $@ $< -- $(CFLAGS)
+	../garlic -o $@ $< -- $(CFLAGS)
 
 .PHONY: clean
 

@@ -14,7 +14,7 @@ cd scheme-compiler
 bundle install
 
 # Compile and run an example. Ensure that gcc is installed.
-./s-expr.rb test/success/full.scm
+./garlic test/success/full.scm
 ./main
 
 # Run the tests
