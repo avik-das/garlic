@@ -1572,7 +1572,7 @@ module AST
       #
       # 2. For each argument on the stack, generate code to add it to the
       #    current frame. Note that when the lambda is being invoked, the
-      #    scm_fncall function has already created a new frame using the
+      #    garlic_fncall function has already created a new frame using the
       #    lambda's parent frame, so we'll be using that frame.
       #
       # 3. Generate code to run the lambda body.
@@ -1584,9 +1584,10 @@ module AST
       #    create a wrapped lambda using the make_fn function. The result is
       #    stored in %rax, and we're done.
       #
-      # One thing to watch out for: when scm_fncall invokes the lambda body, a
-      # new frame has already been created and pushed onto the stack. Thus, we
-      # have to reset the offset on the stack to the current frame in our VM.
+      # One thing to watch out for: when garlic_fncall invokes the lambda body,
+      # a new frame has already been created and pushed onto the stack. Thus,
+      # we have to reset the offset on the stack to the current frame in our
+      # VM.
 
       name = vm.genfnname
       endname = "#{name}_end"
@@ -1699,7 +1700,7 @@ module AST
 
         vm.asm "        mov     %rax, %rdi"
         vm.asm "        mov     $#{filtered_args.size}, %rsi"
-        vm.call "scm_fncall"
+        vm.call "garlic_fncall"
 
         vm.popn(filtered_args.size)
       end
@@ -2128,11 +2129,11 @@ module VM
 
       # Another issue, when calling a "user-defined" function, is that we want
       # the arguments to be as close to the top of the stack as possible, so
-      # that the scm_fncall function (and other functions it calls into) know
-      # where its arguments are, regardless of how the stack had to be aligned.
-      # So, we'll align the stack *before* pushing the arguments. Whether or
-      # not we need to align depends on the current stack alignment and the
-      # number arguments we'll be pushing.
+      # that the garlic_fncall function (and other functions it calls into)
+      # know where its arguments are, regardless of how the stack had to be
+      # aligned.  So, we'll align the stack *before* pushing the arguments.
+      # Whether or not we need to align depends on the current stack alignment
+      # and the number arguments we'll be pushing.
       is_stack_aligned = (lstoffset / 8) % 2 == 1
       has_even_num_args = num_args_to_push % 2 == 0
 
@@ -2183,7 +2184,7 @@ end
 BUILD_DIR = 'build'
 
 def read_into_tmp_file
-  file = Tempfile.new("scm")
+  file = Tempfile.new("garlic")
   contents = STDIN.read
   file.write(contents)
   file.close

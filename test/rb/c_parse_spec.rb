@@ -6,7 +6,7 @@ describe CParser do
   describe '#parse_c_exports_from_string' do
     it 'parses a basic exports structure' do
       input = <<-CODE
-scm_native_export_t mod_exports[] = {
+garlic_native_export_t mod_exports[] = {
     {"init", init, 1},
     {"cleanup", cleanup, 2},
     0
@@ -24,7 +24,7 @@ scm_native_export_t mod_exports[] = {
 
     it 'allows for various amounts of space' do
       input = <<-CODE
-scm_native_export_t mod_exports[] = {
+garlic_native_export_t mod_exports[] = {
     {"a", a, 0},
     {"b",b,0},
     { "c", c, 0 },
@@ -50,7 +50,7 @@ scm_native_export_t mod_exports[] = {
 
     it 'allows for tight spacing' do
       input = <<-CODE
-scm_native_export_t mod_exports[]={{"a",a,0},0};
+garlic_native_export_t mod_exports[]={{"a",a,0},0};
       CODE
 
       exports = [
@@ -63,18 +63,18 @@ scm_native_export_t mod_exports[]={{"a",a,0},0};
 
     it 'ignores surrounding code' do
       input = <<-CODE
-#include <scm.h>
+#include <garlic.h>
 #include <other_lib.h>
 
-scm_value_t init(scm_value_t a) {
+garlic_value_t init(garlic_value_t a) {
     return NULL;
 }
 
-scm_value_t cleanup() {
+garlic_value_t cleanup() {
     return NULL;
 }
 
-scm_native_export_t mod_exports[] = {
+garlic_native_export_t mod_exports[] = {
     {"init", init, 1},
     {"cleanup", cleanup, 2},
     0

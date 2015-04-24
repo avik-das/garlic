@@ -33,7 +33,7 @@ module CParser
 
     rule(:exports) {
       space? >>
-        str('scm_native_export_t') >>
+        str('garlic_native_export_t') >>
         space >>
         id >>
         str('[]') >>
@@ -85,7 +85,7 @@ module CParser
   end
 
   def self.parse_c_exports_from_string(module_name, src)
-    src = src.sub(/.*scm_native_export_t/m, 'scm_native_export_t')
+    src = src.sub(/.*garlic_native_export_t/m, 'garlic_native_export_t')
     tree = CExports.new.parse(src)
     transformed = CExportsTransform.new.apply(tree)
     transformed[:exports]

@@ -1,4 +1,4 @@
-#include <scm.h>
+#include <garlic.h>
 #include <SDL2/SDL.h>
 
 #ifdef __APPLE__
@@ -24,12 +24,12 @@ struct context {
 
 typedef struct context *context;
 
-scm_value_t cleanup(scm_value_t ctx);
+garlic_value_t cleanup(garlic_value_t ctx);
 
-scm_value_t init(
-        scm_value_t s_title,
-        scm_value_t s_w,
-        scm_value_t s_h) {
+garlic_value_t init(
+        garlic_value_t s_title,
+        garlic_value_t s_w,
+        garlic_value_t s_h) {
     context ctx = (context) malloc(sizeof(struct context));
 
     if (ctx == NULL) {
@@ -43,9 +43,9 @@ scm_value_t init(
         return NIL_VALUE;
     }
 
-    const char *title = scm_unwrap_string(s_title);
-    int w = SCMVALUE_TO_INT(s_w);
-    int h = SCMVALUE_TO_INT(s_h);
+    const char *title = garlic_unwrap_string(s_title);
+    int w = garlicval_to_int(s_w);
+    int h = garlicval_to_int(s_h);
 
     ctx->window = SDL_CreateWindow(
             title,
@@ -74,11 +74,11 @@ scm_value_t init(
         return NIL_VALUE;
     }
 
-    return scm_wrap_native(ctx);
+    return garlic_wrap_native(ctx);
 }
 
-scm_value_t load_img(scm_value_t s_ctx, scm_value_t s_filename) {
-    const char *filename = scm_unwrap_string(s_filename);
+garlic_value_t load_img(garlic_value_t s_ctx, garlic_value_t s_filename) {
+    const char *filename = garlic_unwrap_string(s_filename);
 
     SDL_Surface *img = IMG_Load(filename);
 
@@ -87,12 +87,12 @@ scm_value_t load_img(scm_value_t s_ctx, scm_value_t s_filename) {
         return NIL_VALUE;
     }
 
-    return scm_wrap_native(img);
+    return garlic_wrap_native(img);
 }
 
-scm_value_t show_img(scm_value_t s_ctx, scm_value_t s_img) {
-    context ctx = (context) scm_unwrap_native(s_ctx);
-    SDL_Surface *img = (SDL_Surface *) scm_unwrap_native(s_img);
+garlic_value_t show_img(garlic_value_t s_ctx, garlic_value_t s_img) {
+    context ctx = (context) garlic_unwrap_native(s_ctx);
+    SDL_Surface *img = (SDL_Surface *) garlic_unwrap_native(s_img);
 
     ctx->texture = SDL_CreateTextureFromSurface(ctx->renderer, img);
 
@@ -109,15 +109,15 @@ scm_value_t show_img(scm_value_t s_ctx, scm_value_t s_img) {
     return NIL_VALUE;
 }
 
-scm_value_t free_image(scm_value_t s_img) {
-    SDL_Surface *img = (SDL_Surface *) scm_unwrap_native(s_img);
+garlic_value_t free_image(garlic_value_t s_img) {
+    SDL_Surface *img = (SDL_Surface *) garlic_unwrap_native(s_img);
 
     if (img != NULL) SDL_FreeSurface(img);
     return NIL_VALUE;
 }
 
-scm_value_t main_loop(scm_value_t s_ctx) {
-    context ctx = (context) scm_unwrap_native(s_ctx);
+garlic_value_t main_loop(garlic_value_t s_ctx) {
+    context ctx = (context) garlic_unwrap_native(s_ctx);
 
     SDL_RenderClear(ctx->renderer);
     SDL_RenderCopy(ctx->renderer, ctx->texture, NULL, NULL);
@@ -141,8 +141,8 @@ scm_value_t main_loop(scm_value_t s_ctx) {
     return NIL_VALUE;
 }
 
-scm_value_t cleanup(scm_value_t s_ctx) {
-    context ctx = (context) scm_unwrap_native(s_ctx);
+garlic_value_t cleanup(garlic_value_t s_ctx) {
+    context ctx = (context) garlic_unwrap_native(s_ctx);
 
     if (ctx == NULL) return NIL_VALUE;
 
@@ -154,7 +154,7 @@ scm_value_t cleanup(scm_value_t s_ctx) {
     return NIL_VALUE;
 }
 
-scm_native_export_t sdl2_exports[] = {
+garlic_native_export_t sdl2_exports[] = {
     {"init", init, 3},
     {"load-img", load_img, 3},
     {"show-img", show_img, 2},

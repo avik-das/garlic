@@ -4,7 +4,7 @@
 # define cdecl(s) s
 #endif
 
-         .global cdecl(scm_fncall)
+         .global cdecl(garlic_fncall)
          .global cdecl(gather_varargs)
 
 # stdlib functions
@@ -25,7 +25,7 @@
 
          .text
 
-cdecl(scm_fncall):
+cdecl(garlic_fncall):
         # This function is called with the wrapped lambda, and the number of
         # arguments to the lambda as the arguments. A new frame is created
         # using the lambda's parent frame as the parent, and the function
@@ -56,7 +56,7 @@ cdecl(gather_varargs):
         # stack contains the following elements:
         #
         # %rsp - return address to caller of gather_varargs
-        #        stack frame pushed by scm_fncall
+        #        stack frame pushed by garlic_fncall
         #        return address to original caller of function
         #        first argument to original function
         #
