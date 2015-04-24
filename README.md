@@ -9,8 +9,8 @@ Quick Start
 -----------
 
 ```sh
-git clone https://github.com/avik-das/scheme-compiler.git
-cd scheme-compiler
+git clone https://github.com/avik-das/garlic.git
+cd garlic
 bundle install
 
 # Compile and run an example. Ensure that gcc is installed.

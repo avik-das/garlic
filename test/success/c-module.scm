@@ -1,8 +1,8 @@
-; libctest is a C module, not a scheme one.
+; libctest is a C module, not a Garlic one.
 (require "../aux/libc_module")
 
 ; We can call arbitrary methods inside the C module, passing it parameters and
-; getting back values that can be composed with other, Scheme functions.
+; getting back values that can be composed with other, Garlic functions.
 (display (libc_module:add 1 2)) (newline)
 (display (+ (libc_module:add 3 4) 5)) (newline)
 

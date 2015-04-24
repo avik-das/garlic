@@ -10,7 +10,7 @@ require_relative 'c_parse'
 
 ## INITIAL PARSER ##############################################################
 
-class Scheme < Parslet::Parser
+class GarlicParser < Parslet::Parser
   rule(:space)     { match('\s').repeat(1) }
   rule(:space?)    { space.maybe }
 
@@ -97,9 +97,9 @@ module AST
 
   class ParseException < Exception; end
 
-  class SchemeModule
-    MODULE_TYPE_SCM = :scheme
-    MODULE_TYPE_C   = :c
+  class ProgramModule
+    MODULE_TYPE_GARLIC = :garlic
+    MODULE_TYPE_C      = :c
 
     def initialize(filename,
                    module_name,
@@ -148,7 +148,7 @@ module AST
     :star
   )
 
-  class Program
+  class GarlicModule
     include CommonTransformations
 
     def initialize(*statements)
@@ -203,7 +203,7 @@ module AST
             filename,
             name,
             false,
-            SchemeModule::MODULE_TYPE_SCM,
+            ProgramModule::MODULE_TYPE_GARLIC,
             @included_modules
           )
         elsif File.file?("#{name}.c")
@@ -214,7 +214,7 @@ module AST
             filename,
             name,
             false,
-            SchemeModule::MODULE_TYPE_C,
+            ProgramModule::MODULE_TYPE_C,
             @included_modules
           )
         else
@@ -322,7 +322,7 @@ module AST
         .uniq
 
       unless dups.empty?
-        raise SchemeModule::CompileException.new(
+        raise GarlicModule::CompileException.new(
           "multiple imported symbols with the same name: " + dups.join(", "))
       end
 
@@ -1179,7 +1179,7 @@ module AST
     rule(string: simple(:s))  { String.new(s) }
 
     rule(comment: simple(:c)) { Comment.new(c) }
-    rule(exprs: sequence(:x)) { Program.new(*x) }
+    rule(exprs: sequence(:x)) { GarlicModule.new(*x) }
   end
 
   def AST.construct_from_parse_tree(tree, filename, included_modules)
@@ -1201,12 +1201,12 @@ module AST
     "r9"
   ]
 
-  class SchemeModule
+  class ProgramModule
     class CompileException < Exception; end
 
     def codegen(all_modules)
       case module_type
-      when MODULE_TYPE_SCM
+      when MODULE_TYPE_GARLIC
         ast.codegen(filename, module_name, is_main, all_modules)
       when MODULE_TYPE_C
         ast.codegen(filename, module_name, all_modules)
@@ -1217,7 +1217,7 @@ module AST
     end
   end
 
-  class Program
+  class GarlicModule
     def codegen(filename, symbol_prefix, is_main, all_modules)
       vm = VM::VM.new(
         filename,
@@ -1463,10 +1463,10 @@ module AST
           }
 
         if require_spec.nil?
-          raise SchemeModule::CompileException.new(
+          raise ProgramModule::CompileException.new(
             "unable to find required module: #{module_prefix}")
         elsif require_spec.basename == module_prefix and require_spec.nickname
-          raise SchemeModule::CompileException.new(
+          raise ProgramModule::CompileException.new(
             "renamed module #{require_spec.basename} " +
               "not referred by nickname #{require_spec.nickname}")
         else
@@ -1481,13 +1481,13 @@ module AST
         if child_program.nil?
           # This can't happen since the requires correspond one-to-one with the
           # child programs
-          raise SchemeModule::CompileException.new(
+          raise ProgramModule::CompileException.new(
             "internal error: can't find required child module " +
               "#{require_spec.absolute_path}")
         end
 
         unless child_program.ast.module_exports.include?(internal_name.intern)
-          raise SchemeModule::CompileException.new(
+          raise ProgramModule::CompileException.new(
             "module \"#{module_prefix}\" does not export symbol " +
               "\"#{internal_name}\"")
         end
@@ -1511,7 +1511,7 @@ module AST
 
           load_external_symbol(vm, name, module_prefix)
         else
-          raise SchemeModule::CompileException.new(
+          raise ProgramModule::CompileException.new(
             "undefined variable referenced: #{name}")
         end
       end
@@ -2221,20 +2221,20 @@ end
 def gather_asts(filename,
                 module_name,
                 is_main,
-                module_type = AST::SchemeModule::MODULE_TYPE_SCM,
+                module_type = AST::ProgramModule::MODULE_TYPE_GARLIC,
                 gathered = nil)
   gathered ||= Set.new
   gathered << filename
 
   case module_type
-  when AST::SchemeModule::MODULE_TYPE_SCM
+  when AST::ProgramModule::MODULE_TYPE_GARLIC
     file = File.read(filename)
-    parsed = Scheme.new.parse(file)
+    parsed = GarlicParser.new.parse(file)
     ast = AST.construct_from_parse_tree(parsed, filename, gathered)
 
     child_modules = ast.recursive_requires
 
-    AST::SchemeModule.new(
+    AST::ProgramModule.new(
       filename,
       module_name,
       is_main,
@@ -2242,10 +2242,10 @@ def gather_asts(filename,
       ast,
       child_modules
     )
-  when AST::SchemeModule::MODULE_TYPE_C
+  when AST::ProgramModule::MODULE_TYPE_C
     ast = AST::CModule.new(filename, module_name)
 
-    AST::SchemeModule.new(
+    AST::ProgramModule.new(
       filename,
       module_name,
       is_main,
@@ -2265,7 +2265,7 @@ def run_gcc(out_filename, compiler_opts)
   # an option that was quoted and contained spaces, it would be improperly
   # handled:
   #
-  #   #{__FILE__} input-file.scm -- a "b c" d
+  #   ./garlic input-file.scm -- a "b c" d
   #
   # would result in
   #

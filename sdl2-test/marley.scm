@@ -1,6 +1,6 @@
 (require sdl2)
 
-(define *title* "sdl-from-scheme")
+(define *title* "sdl-from-garlic")
 (define *width*  256)
 (define *height* 256)
 
