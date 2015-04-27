@@ -408,7 +408,7 @@ When importing using this syntax, it is still possible to refer to identifiers i
 
 In any program, it can be assumed that an implitic `(require stdlib *)` is present at the top of all modules. This means any functions defined in the standard library are available without any prefixing in all modules. As a consequence of using the "import all" version of the import, it is also possible to refer to standard library functions using the `stdlib` prefix. Again, this is useful if a local definition shadows a standard library definition.
 
-```stdlib
+```scheme
 ; notice the lack of an stdlib import
 
 (not #t)
