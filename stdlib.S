@@ -13,10 +13,6 @@
          .global cdecl(stdlib_difference)
          .global cdecl(stdlib_mul)
 
-         .global cdecl(stdlib_cons)
-         .global cdecl(stdlib_car)
-         .global cdecl(stdlib_cdr)
-         .global cdecl(stdlib_nullp)
          .global cdecl(stdlib_equal_sign)
 
          .global cdecl(stdlib_display)
@@ -91,7 +87,7 @@ gather_varargs_begin:                   #   so save the original value too
         push    %r8                     # save the number of arguments left
         push    %r9                     #   and the pseudo-stack pointer
         push    %r10                    #   and the total number of arguments
-        call    cdecl(make_cons)
+        call    cdecl(garlic_make_cons)
         mov     %rax, %rsi              # the cons is the next item in the list
         pop     %r10
         pop     %r9
@@ -128,35 +124,6 @@ cdecl(stdlib_mul):
         call    cdecl(gather_varargs)
         mov     %rax, %rdi
         call    cdecl(stdlib_impl_mul)
-        add     $8, %rsp
-        ret
-
-cdecl(stdlib_cons):
-        # ignore the pushed frame
-        mov     16(%rsp), %rdi
-        mov     24(%rsp), %rsi
-        call    cdecl(make_cons)
-        add     $8, %rsp
-        ret
-
-cdecl(stdlib_car):
-        # ignore the pushed frame
-        mov     16(%rsp), %rax
-        mov     8(%rax), %rax
-        add     $8, %rsp
-        ret
-
-cdecl(stdlib_cdr):
-        # ignore the pushed frame
-        mov     16(%rsp), %rax
-        mov     16(%rax), %rax
-        add     $8, %rsp
-        ret
-
-cdecl(stdlib_nullp):
-        # ignore the pushed frame
-        mov     16(%rsp), %rdi
-        call    cdecl(stdlib_impl_nullp)
         add     $8, %rsp
         ret
 

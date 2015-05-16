@@ -85,11 +85,6 @@ module AST
     :+,
     :-,
     :*,
-
-    :cons,
-    :car,
-    :cdr,
-    :null?,
     :'=',
 
     :display
@@ -173,6 +168,18 @@ module AST
           )
         )
       end
+
+      # It's safe to always include "core" because it is a C module, meaning it
+      # will never end up importing itself.
+      #
+      # (require core *)
+      @statements.unshift(
+        NestedNode.new(
+          Var.new(:require),
+          Var.new(:core),
+          Var.new(:*)
+        )
+      )
 
       @included_modules = included_modules
 
@@ -1420,7 +1427,7 @@ module AST
 
           vm.asm "        mov     %rax, %rdi"
           vm.with_aligned_stack do
-            vm.call "make_cons"
+            vm.call "garlic_make_cons"
           end
         else
           child.codegen(vm, program, all_modules)

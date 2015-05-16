@@ -34,3 +34,10 @@ void * garlic_unwrap_native(garlic_value_t wrapped);
 /* Given a value of type garlic_value_t, get back the C string contained
  * within. */
 const char * garlic_unwrap_string(garlic_value_t wrapped);
+
+/* Create a cons cell with the given elements. */
+garlic_value_t garlic_make_cons(garlic_value_t car_val, garlic_value_t cdr_val);
+/* Retrieve the first element of a cons cell. */
+garlic_value_t garlic_car(garlic_value_t cons_val);
+/* Retrieve the second element of a cons cell. */
+garlic_value_t garlic_cdr(garlic_value_t cons_val);

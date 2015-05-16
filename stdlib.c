@@ -13,11 +13,6 @@ typedef void * garlic_value_t;
 garlic_value_t stdlib_sum(garlic_value_t vals);
 garlic_value_t stdlib_difference(garlic_value_t vals);
 garlic_value_t stdlib_mul(garlic_value_t vals);
-
-garlic_value_t stdlib_cons(garlic_value_t car_val, garlic_value_t cdr_val);
-garlic_value_t stdlib_car(garlic_value_t cons_val);
-garlic_value_t stdlib_cdr(garlic_value_t cons_val);
-garlic_value_t stdlib_nullp(garlic_value_t value);
 garlic_value_t stdlib_equal_sign(garlic_value_t vals);
 
 garlic_value_t stdlib_display(garlic_value_t value);
@@ -25,7 +20,6 @@ garlic_value_t stdlib_display(garlic_value_t value);
 garlic_value_t stdlib_impl_sum(garlic_value_t vals);
 garlic_value_t stdlib_impl_difference(garlic_value_t vals);
 garlic_value_t stdlib_impl_mul(garlic_value_t vals);
-garlic_value_t stdlib_impl_nullp(garlic_value_t value);
 garlic_value_t stdlib_impl_equal_sign(garlic_value_t vals);
 garlic_value_t stdlib_impl_display(garlic_value_t value);
 
@@ -90,11 +84,6 @@ struct frame_t * new_root_frame() {
     add_to_frame(frame, "+", make_fn(frame, stdlib_sum, 0));
     add_to_frame(frame, "-", make_fn(frame, stdlib_difference, 0));
     add_to_frame(frame, "*", make_fn(frame, stdlib_mul, 0));
-
-    add_to_frame(frame, "cons", make_fn(frame, stdlib_cons, 0));
-    add_to_frame(frame, "car", make_fn(frame, stdlib_car, 0));
-    add_to_frame(frame, "cdr", make_fn(frame, stdlib_cdr, 0));
-    add_to_frame(frame, "null?", make_fn(frame, stdlib_nullp, 0));
     add_to_frame(frame, "=", make_fn(frame, stdlib_equal_sign, 0));
 
     add_to_frame(frame, "display", make_fn(frame, stdlib_display, 0));
@@ -251,19 +240,6 @@ garlic_value_t make_string_with_contents(const char *contents) {
     return string;
 }
 
-garlic_value_t make_cons(garlic_value_t car_val, garlic_value_t cdr_val) {
-    struct garlic_cons *cons = (struct garlic_cons *)
-        malloc(sizeof(struct garlic_cons));
-
-    cons->super.type = GARLIC_TYPE_CONS;
-    cons->car = car_val;
-    cons->cdr = cdr_val;
-
-    //printf("returning cons %p (%p . %p)\n", cons, car_val, cdr_val);
-
-    return cons;
-}
-
 /** QUOTED ATOMS **************************************************************/
 
 map_t atom_db;
@@ -345,12 +321,6 @@ garlic_value_t stdlib_impl_mul(garlic_value_t vals) {
     }
 
     return (garlic_value_t) ((prod << 1) | 1);
-}
-
-garlic_value_t stdlib_impl_nullp(garlic_value_t value) {
-    return value == NIL_VALUE ?
-        (garlic_value_t) TRUE_VALUE :
-        (garlic_value_t) FALSE_VALUE;
 }
 
 garlic_value_t stdlib_impl_equal_sign(garlic_value_t vals) {
@@ -460,4 +430,34 @@ void * garlic_unwrap_native(garlic_value_t wrapped) {
     }
 
     return ((struct garlic_wrapped_native *) wrapped)->native_val;
+}
+
+garlic_value_t garlic_make_cons(garlic_value_t car_val,
+        garlic_value_t cdr_val) {
+    struct garlic_cons *cons = (struct garlic_cons *)
+        malloc(sizeof(struct garlic_cons));
+
+    cons->super.type = GARLIC_TYPE_CONS;
+    cons->car = car_val;
+    cons->cdr = cdr_val;
+
+    //printf("returning cons %p (%p . %p)\n", cons, car_val, cdr_val);
+
+    return cons;
+}
+
+garlic_value_t garlic_car(garlic_value_t cons_val) {
+    if (!value_is_cons(cons_val)) {
+        return NULL;
+    }
+
+    return ((struct garlic_cons *) cons_val)->car;
+}
+
+garlic_value_t garlic_cdr(garlic_value_t cons_val) {
+    if (!value_is_cons(cons_val)) {
+        return NULL;
+    }
+
+    return ((struct garlic_cons *) cons_val)->cdr;
 }
