@@ -1,9 +1,9 @@
 require 'parslet'
 
 module CParser
-  class CExport < Struct.new(:name, :arity)
+  class CExport < Struct.new(:name, :arity, :is_vararg)
     def to_s
-      "{\"#{name}\", #{arity}}"
+      "{\"#{name}\", #{arity}, #{is_vararg ? 1 : 0}}"
     end
   end
 
@@ -58,6 +58,13 @@ module CParser
             number.as(:arity) >>
             space? >>
 
+            (
+              str(',') >>
+              space? >>
+              number.as(:is_vararg) >>
+              space?
+            ).maybe >>
+
             str('}') >>
             space? >>
             str(',') >>
@@ -78,9 +85,16 @@ module CParser
 
   class CExportsTransform < Parslet::Transform
     rule(string: simple(:string)) { string.to_s }
+
     rule(fnname: simple(:fnname),
          arity: simple(:arity)) {
-      CExport.new(fnname, arity.to_i)
+      CExport.new(fnname, arity.to_i, false)
+    }
+
+    rule(fnname: simple(:fnname),
+         arity: simple(:arity),
+         is_vararg: simple(:is_vararg)) {
+      CExport.new(fnname, arity.to_i, is_vararg == "1")
     }
   end
 

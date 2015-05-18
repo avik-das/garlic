@@ -1328,8 +1328,29 @@ module AST
       @c_exports.each_with_index do |exp, i|
         asm "#{wrapper_prefix}_native_fn_#{i}:"
 
-        spill_onto_stack = exp.arity > ARG_REGS.size
-        num_args_in_reg = [exp.arity, ARG_REGS.size].min
+        if exp.is_vararg
+          asm "        movq    $#{exp.arity}, %rdi"
+          asm "        call    cdecl(gather_varargs)"
+
+          # When the function was initially called, there was an extra space
+          # left on the stack specifically to store the gathered extra
+          # arguments. This is needed in the case that there were no extra
+          # arguments, so essentially, a new argument needs to be added to the
+          # stack. Thus, we've guaranteed we're not overwriting anything on
+          # the stack that we need to preserve.
+          last_arg_offset = exp.arity * 8 + 16
+          asm "        movq    %rax, #{last_arg_offset}(%rsp)"
+        end
+
+        num_args =
+          if exp.is_vararg
+            exp.arity + 1 # required arguments + "rest" list
+          else
+            exp.arity
+          end
+
+        spill_onto_stack = num_args > ARG_REGS.size
+        num_args_in_reg = [num_args, ARG_REGS.size].min
 
         (0...num_args_in_reg)
           .map {|i| i * 8 + 16}

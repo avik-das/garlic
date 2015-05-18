@@ -14,8 +14,28 @@ garlic_native_export_t mod_exports[] = {
       CODE
 
       exports = [
-        CParser::CExport.new('init', 1),
-        CParser::CExport.new('cleanup', 2)
+        CParser::CExport.new('init', 1, false),
+        CParser::CExport.new('cleanup', 2, false)
+      ]
+
+      parsed = CParser.parse_c_exports_from_string('mod', input)
+      expect(parsed).to eq(exports)
+    end
+
+    it 'optionally accepts a "variadic" flag' do
+      input = <<-CODE
+garlic_native_export_t mod_exports[] = {
+    {"non-variadic-0", non_variadic_0, 1},
+    {"non-variadic-1", non_variadic_1, 1, 0},
+    {"variadic-0"    , variadic      , 1, 1},
+    0
+};
+      CODE
+
+      exports = [
+        CParser::CExport.new('non-variadic-0', 1, false),
+        CParser::CExport.new('non-variadic-1', 1, false),
+        CParser::CExport.new('variadic-0'    , 1, true)
       ]
 
       parsed = CParser.parse_c_exports_from_string('mod', input)
@@ -36,12 +56,12 @@ garlic_native_export_t mod_exports[] = {
       CODE
 
       exports = [
-        CParser::CExport.new('a', 0),
-        CParser::CExport.new('b', 0),
-        CParser::CExport.new('c', 0),
-        CParser::CExport.new('d', 0),
-        CParser::CExport.new('e', 0),
-        CParser::CExport.new('f', 0)
+        CParser::CExport.new('a', 0, false),
+        CParser::CExport.new('b', 0, false),
+        CParser::CExport.new('c', 0, false),
+        CParser::CExport.new('d', 0, false),
+        CParser::CExport.new('e', 0, false),
+        CParser::CExport.new('f', 0, false)
       ]
 
       parsed = CParser.parse_c_exports_from_string('mod', input)
@@ -54,7 +74,7 @@ garlic_native_export_t mod_exports[]={{"a",a,0},0};
       CODE
 
       exports = [
-        CParser::CExport.new('a', 0)
+        CParser::CExport.new('a', 0, false)
       ]
 
       parsed = CParser.parse_c_exports_from_string('mod', input)
@@ -86,8 +106,8 @@ void private_function() {
       CODE
 
       exports = [
-        CParser::CExport.new('init', 1),
-        CParser::CExport.new('cleanup', 2)
+        CParser::CExport.new('init', 1, false),
+        CParser::CExport.new('cleanup', 2, false)
       ]
 
       parsed = CParser.parse_c_exports_from_string('mod', input)

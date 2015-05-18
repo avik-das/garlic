@@ -4,6 +4,7 @@ typedef struct garlic_native_export {
     char *name;
     void *fn;
     unsigned int arity;
+    unsigned int variadic;
 } garlic_native_export_t;
 
 typedef void * garlic_value_t;
