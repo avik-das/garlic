@@ -1,14 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <inttypes.h>
+#include <garlic.h>
 
 #include "hashmap.h"
-
-#define NIL_VALUE   ((garlic_value_t) 0)
-#define TRUE_VALUE  ((garlic_value_t) 2)
-#define FALSE_VALUE ((garlic_value_t) 4)
-
-typedef void * garlic_value_t;
 
 /** ENVIRONMENT FRAMES ********************************************************/
 
@@ -80,20 +74,6 @@ struct frame_t * new_frame_with_parent(struct frame_t *parent) {
 
 /** STANDARD TYPES ************************************************************/
 
-enum garlic_value_type {
-    // These types are not used except when returning the type of a value.
-    GARLIC_TYPE_NIL,
-    GARLIC_TYPE_BOOLEAN,
-    GARLIC_TYPE_FIXNUM,
-
-    // These types are stored alongside the values of that type.
-    GARLIC_TYPE_LAMBDA,
-    GARLIC_TYPE_ATOM,
-    GARLIC_TYPE_STRING,
-    GARLIC_TYPE_CONS,
-    GARLIC_TYPE_WRAPPED_NATIVE
-};
-
 struct garlic_value {
     enum garlic_value_type type;
 };
@@ -125,69 +105,6 @@ struct garlic_wrapped_native {
     struct garlic_value super;
     void *native_val;
 };
-
-static inline int value_is_nil(garlic_value_t value) {
-    return value == NIL_VALUE;
-}
-
-static inline int value_is_true(garlic_value_t value) {
-    return value == TRUE_VALUE;
-}
-
-static inline int value_is_false(garlic_value_t value) {
-    return value == FALSE_VALUE;
-}
-
-static inline int value_is_fixnum(garlic_value_t value) {
-    return ((int64_t) value) & 0x1;
-}
-
-static inline int value_is_primitive(garlic_value_t value) {
-    return value_is_nil(value) ||
-        value_is_fixnum(value) ||
-        value_is_true(value) ||
-        value_is_false(value);
-}
-
-static inline int value_is_string(garlic_value_t value) {
-    if (value_is_primitive(value)) {
-        return 0;
-    }
-
-    return ((struct garlic_value *) value)->type == GARLIC_TYPE_STRING;
-}
-
-static inline int value_is_lambda(garlic_value_t value) {
-    if (value_is_primitive(value)) {
-        return 0;
-    }
-
-    return ((struct garlic_value *) value)->type == GARLIC_TYPE_LAMBDA;
-}
-
-static inline int value_is_atom(garlic_value_t value) {
-    if (value_is_primitive(value)) {
-        return 0;
-    }
-
-    return ((struct garlic_value *) value)->type == GARLIC_TYPE_ATOM;
-}
-
-static inline int value_is_cons(garlic_value_t value) {
-    if (value_is_primitive(value)) {
-        return 0;
-    }
-
-    return ((struct garlic_value *) value)->type == GARLIC_TYPE_CONS;
-}
-
-static inline int value_is_wrapped_native(garlic_value_t value) {
-    if (value_is_primitive(value)) {
-        return 0;
-    }
-
-    return ((struct garlic_value *) value)->type == GARLIC_TYPE_WRAPPED_NATIVE;
-}
 
 garlic_value_t make_fn(struct frame_t *parent_frame, void *fnpointer,
         int is_native) {
@@ -260,7 +177,7 @@ garlic_value_t garlic_wrap_native(void *native_val) {
 }
 
 const char * garlic_unwrap_string(garlic_value_t wrapped) {
-    if (!value_is_string(wrapped)) {
+    if (garlic_get_type(wrapped) != GARLIC_TYPE_STRING) {
         return NULL;
     }
 
@@ -268,7 +185,7 @@ const char * garlic_unwrap_string(garlic_value_t wrapped) {
 }
 
 void * garlic_unwrap_native(garlic_value_t wrapped) {
-    if (!value_is_wrapped_native(wrapped)) {
+    if (garlic_get_type(wrapped) != GARLIC_TYPE_WRAPPED_NATIVE) {
         return NULL;
     }
 
@@ -276,7 +193,7 @@ void * garlic_unwrap_native(garlic_value_t wrapped) {
 }
 
 const char * garlic_atom_name(garlic_value_t atom) {
-    if (!value_is_atom(atom)) {
+    if (garlic_get_type(atom) != GARLIC_TYPE_ATOM) {
         return NULL;
     }
 
@@ -298,7 +215,7 @@ garlic_value_t garlic_make_cons(garlic_value_t car_val,
 }
 
 garlic_value_t garlic_car(garlic_value_t cons_val) {
-    if (!value_is_cons(cons_val)) {
+    if (garlic_get_type(cons_val) != GARLIC_TYPE_CONS) {
         return NULL;
     }
 
@@ -306,7 +223,7 @@ garlic_value_t garlic_car(garlic_value_t cons_val) {
 }
 
 garlic_value_t garlic_cdr(garlic_value_t cons_val) {
-    if (!value_is_cons(cons_val)) {
+    if (garlic_get_type(cons_val) != GARLIC_TYPE_CONS) {
         return NULL;
     }
 
