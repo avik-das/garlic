@@ -1696,7 +1696,21 @@ module AST
 
       filtered_args = @args.reject { |arg| arg.is_a?(Comment) }
 
-      vm.with_aligned_stack(filtered_args.size) do
+      # We don't actually know what function is being called. If it's a
+      # variadic garlic function, then the extra arguments will be gathered up
+      # and added to the new frame that will be created for the function
+      # invocation.
+      #
+      # However, if it's a variadic C function, then the gathered arguments
+      # need to be added back to the stack, so we should leave some space for
+      # that. This space needs to exist even if there are no extra arguments.
+
+      # Make sure to account for the extra space left on the stack above when
+      # aligning the stack.
+      vm.with_aligned_stack(filtered_args.size + 1) do
+        # Extra space on the stack.
+        vm.push
+
         filtered_args.reverse.each do |arg|
           arg.codegen(vm, program, all_modules)
           vm.push("%rax")
@@ -1709,7 +1723,8 @@ module AST
         vm.asm "        mov     $#{filtered_args.size}, %rsi"
         vm.call "garlic_fncall"
 
-        vm.popn(filtered_args.size)
+        # Make sure to pop off the extra space left on the stack.
+        vm.popn(filtered_args.size + 1)
       end
     end
   end
