@@ -28,7 +28,7 @@ enum garlic_value_type garlic_get_type(garlic_value_t val);
 #define FALSE_VALUE ((garlic_value_t) 4)
 
 /* Convert a value of type garlic_value_t into an int64_t. */
-#define garlicval_to_int(n) (((int64_t) n) >> 1)
+int64_t garlicval_to_int(garlic_value_t n);
 
 /* Convert an int64_t into a value of type garlic_value_t. */
 #define int_to_garlicval(n) ((garlic_value_t) (((n) << 1) | 1))

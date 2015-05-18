@@ -6,10 +6,7 @@
 
          .global cdecl(garlic_fncall)
          .global cdecl(gather_varargs)
-
-# stdlib functions
-
-         .global cdecl(value_to_native_int)
+         .global cdecl(garlicval_to_int)
 
          .text
 
@@ -92,8 +89,7 @@ gather_varargs_done:
         mov     %r10, %rsi              # restore the number of arguments
         ret
 
-# TODO: figure out why this seems to not be needed anymore
-cdecl(value_to_native_int):
+cdecl(garlicval_to_int):
         # A tagged integer is specified by shifting it to the left by one bit,
         # then filling in the least significant bit with "1". When converting
         # back to a native integer, however, it is important that we do an
