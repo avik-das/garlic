@@ -77,7 +77,7 @@ garlic_value_t equal_sign(
     // All the items must be numbers.
     item = vals;
     while (item != NIL_VALUE) {
-        if (!garlic_is_fixnum(garlic_car(item))) {
+        if (garlic_get_type(garlic_car(item)) != GARLIC_TYPE_FIXNUM) {
             // TODO: this will one day become a real error
             printf("ERROR: = can only compare numbers");
             return NIL_VALUE;
@@ -101,6 +101,52 @@ garlic_value_t equal_sign(
     return TRUE_VALUE;
 }
 
+garlic_value_t display(garlic_value_t val);
+
+void display_cons_inner(garlic_value_t cons) {
+    display(garlic_car(cons));
+
+    garlic_value_t cdr_val = garlic_cdr(cons);
+    if (cdr_val == NIL_VALUE) {
+        // Do nothing
+    } else if (garlic_get_type(cdr_val) == GARLIC_TYPE_CONS) {
+        printf(" ");
+        display_cons_inner(cdr_val);
+    } else {
+        printf(" . ");
+        display(cdr_val);
+    }
+}
+
+// TODO: varargs
+garlic_value_t display(garlic_value_t val) {
+    enum garlic_value_type type = garlic_get_type(val);
+
+    if (val == NIL_VALUE) {
+        printf("()");
+    } else if (val == TRUE_VALUE) {
+        printf("#t");
+    } else if (val == FALSE_VALUE) {
+        printf("#f");
+    } else if (type == GARLIC_TYPE_FIXNUM) {
+        printf("%" PRId64, garlicval_to_int(val));
+    } else if (type == GARLIC_TYPE_STRING) {
+        printf("%s", garlic_unwrap_string(val));
+    } else if (type == GARLIC_TYPE_LAMBDA) {
+        printf("#<fn: %p>", val);
+    } else if (type == GARLIC_TYPE_ATOM) {
+        printf("%s", garlic_atom_name(val));
+    } else if (type == GARLIC_TYPE_CONS) {
+        printf("(");
+        display_cons_inner(val);
+        printf(")");
+    } else if (type == GARLIC_TYPE_WRAPPED_NATIVE) {
+        printf("#<native: %p>", garlic_unwrap_native(val));
+    }
+
+    return NIL_VALUE;
+}
+
 // Many of the functions are lifted straight from the runtime, and so, they do
 // not need to be re-implemented here.
 garlic_native_export_t core_exports[] = {
@@ -112,5 +158,6 @@ garlic_native_export_t core_exports[] = {
     {"-", difference, 0, 1},
     {"*", product, 0, 1},
     {"=", equal_sign, 2, 1},
+    {"display", display, 1},
     0
 };

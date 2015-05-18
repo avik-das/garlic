@@ -79,12 +79,6 @@ end
 ## AST GENERATION ##############################################################
 
 module AST
-  # The set of all variable names available in all lexical scopes throughout
-  # each program. These are added by stdlib.c.
-  GLOBAL_SYMBOLS = Set.new([
-    :display
-  ])
-
   class ParseException < Exception; end
 
   class ProgramModule
@@ -344,9 +338,7 @@ module AST
 
     def compute_names_in_scope
       def_names = def_names_from_statements(@statements)
-
-      @names_in_scope = Set.new(GLOBAL_SYMBOLS)
-      @names_in_scope.merge(def_names)
+      @names_in_scope = def_names
 
       @statements.each do |statement|
         statement.compute_names_in_scope(@names_in_scope)

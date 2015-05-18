@@ -4,17 +4,11 @@
 
 #include "hashmap.h"
 
-#define NIL_VALUE   0
-#define TRUE_VALUE  2
-#define FALSE_VALUE 4
+#define NIL_VALUE   ((garlic_value_t) 0)
+#define TRUE_VALUE  ((garlic_value_t) 2)
+#define FALSE_VALUE ((garlic_value_t) 4)
 
 typedef void * garlic_value_t;
-
-garlic_value_t stdlib_display(garlic_value_t value);
-
-garlic_value_t stdlib_impl_display(garlic_value_t value);
-
-int64_t value_to_native_int(garlic_value_t value);
 
 /** ENVIRONMENT FRAMES ********************************************************/
 
@@ -70,11 +64,10 @@ struct frame_t * new_frame() {
 }
 
 struct frame_t * new_root_frame() {
-    struct frame_t *frame = new_frame();
-
-    add_to_frame(frame, "display", make_fn(frame, stdlib_display, 0));
-
-    return frame;
+    // This function exists mostly as documentation; calling this function
+    // signifies that the returned frame, though not any different from other
+    // newly-created frames, will be used as a module's root frame.
+    return new_frame();
 }
 
 struct frame_t * new_frame_with_parent(struct frame_t *parent) {
@@ -88,7 +81,13 @@ struct frame_t * new_frame_with_parent(struct frame_t *parent) {
 /** STANDARD TYPES ************************************************************/
 
 enum garlic_value_type {
-    GARLIC_TYPE_LAMBDA = 0,
+    // These types are not used except when returning the type of a value.
+    GARLIC_TYPE_NIL,
+    GARLIC_TYPE_BOOLEAN,
+    GARLIC_TYPE_FIXNUM,
+
+    // These types are stored alongside the values of that type.
+    GARLIC_TYPE_LAMBDA,
     GARLIC_TYPE_ATOM,
     GARLIC_TYPE_STRING,
     GARLIC_TYPE_CONS,
@@ -132,11 +131,11 @@ static inline int value_is_nil(garlic_value_t value) {
 }
 
 static inline int value_is_true(garlic_value_t value) {
-    return ((int64_t) value) == TRUE_VALUE;
+    return value == TRUE_VALUE;
 }
 
 static inline int value_is_false(garlic_value_t value) {
-    return ((int64_t) value) == FALSE_VALUE;
+    return value == FALSE_VALUE;
 }
 
 static inline int value_is_fixnum(garlic_value_t value) {
@@ -248,52 +247,6 @@ garlic_value_t get_atom(char *name) {
     return value_ptr;
 }
 
-/** STANDARD FUNCTIONS ********************************************************/
-
-void display_cons_inner(struct garlic_cons *cons) {
-    stdlib_impl_display(cons->car);
-
-    if (value_is_nil(cons->cdr)) {
-        // Do nothing
-    } else if (value_is_cons(cons->cdr)) {
-        printf(" ");
-        display_cons_inner((struct garlic_cons *) cons->cdr);
-    } else {
-        printf(" . ");
-        stdlib_impl_display(cons->cdr);
-    }
-}
-
-// TODO: varargs
-garlic_value_t stdlib_impl_display(garlic_value_t value) {
-    if (value_is_nil(value)) {
-        printf("()");
-    } else if (value_is_true(value)) {
-        printf("#t");
-    } else if (value_is_false(value)) {
-        printf("#f");
-    } else if (value_is_fixnum(value)) {
-        printf("%" PRId64, value_to_native_int(value));
-    } else if (value_is_string(value)) {
-        printf("%s", ((struct garlic_string *) value)->contents);
-    } else if (value_is_lambda(value)) {
-        printf("#<fn: %p>", value);
-    } else if (value_is_atom(value)) {
-        printf("%s", ((struct garlic_atom *) value)->name);
-    } else if (value_is_cons(value)) {
-        struct garlic_cons *cons = (struct garlic_cons *) value;
-
-        printf("(");
-        display_cons_inner(cons);
-        printf(")");
-    } else if (value_is_wrapped_native(value)) {
-        printf("#<native: %p>",
-                ((struct garlic_wrapped_native *) value)->native_val);
-    }
-
-    return NIL_VALUE;
-}
-
 /** USERLAND FUNCTIONS ********************************************************/
 
 garlic_value_t garlic_wrap_native(void *native_val) {
@@ -320,6 +273,14 @@ void * garlic_unwrap_native(garlic_value_t wrapped) {
     }
 
     return ((struct garlic_wrapped_native *) wrapped)->native_val;
+}
+
+const char * garlic_atom_name(garlic_value_t atom) {
+    if (!value_is_atom(atom)) {
+        return NULL;
+    }
+
+    return ((struct garlic_atom *) atom)->name;
 }
 
 garlic_value_t garlic_make_cons(garlic_value_t car_val,
@@ -352,7 +313,18 @@ garlic_value_t garlic_cdr(garlic_value_t cons_val) {
     return ((struct garlic_cons *) cons_val)->cdr;
 }
 
-int garlic_is_fixnum(garlic_value_t val) {
-    // TODO: move all the type verifications into userland
-    return value_is_fixnum(val);
+enum garlic_value_type garlic_get_type(garlic_value_t val) {
+    if (val == NIL_VALUE) {
+        return GARLIC_TYPE_NIL;
+    }
+
+    if (val == TRUE_VALUE || val == FALSE_VALUE) {
+        return GARLIC_TYPE_BOOLEAN;
+    }
+
+    if (((int64_t) val) & 0x1) {
+        return GARLIC_TYPE_FIXNUM;
+    }
+
+    return ((struct garlic_value *) val)->type;
 }

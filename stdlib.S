@@ -9,8 +9,6 @@
 
 # stdlib functions
 
-         .global cdecl(stdlib_display)
-
          .global cdecl(value_to_native_int)
 
          .text
@@ -94,13 +92,7 @@ gather_varargs_done:
         mov     %r10, %rsi              # restore the number of arguments
         ret
 
-cdecl(stdlib_display):
-        # ignore the pushed frame
-        mov     16(%rsp), %rdi
-        call    cdecl(stdlib_impl_display)
-        add     $8, %rsp
-        ret
-
+# TODO: figure out why this seems to not be needed anymore
 cdecl(value_to_native_int):
         # A tagged integer is specified by shifting it to the left by one bit,
         # then filling in the least significant bit with "1". When converting
