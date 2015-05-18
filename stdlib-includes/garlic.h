@@ -9,9 +9,9 @@ typedef struct garlic_native_export {
 
 typedef void * garlic_value_t;
 
-#define NIL_VALUE   0
-#define TRUE_VALUE  2
-#define FALSE_VALUE 4
+#define NIL_VALUE   ((garlic_value_t) 0)
+#define TRUE_VALUE  ((garlic_value_t) 2)
+#define FALSE_VALUE ((garlic_value_t) 4)
 
 /* Convert a value of type garlic_value_t into an int64_t. */
 #define garlicval_to_int(n) (((int64_t) n) >> 1)
@@ -42,3 +42,6 @@ garlic_value_t garlic_make_cons(garlic_value_t car_val, garlic_value_t cdr_val);
 garlic_value_t garlic_car(garlic_value_t cons_val);
 /* Retrieve the second element of a cons cell. */
 garlic_value_t garlic_cdr(garlic_value_t cons_val);
+
+/* Determine if a value is a fixnum. */
+garlic_value_t garlic_is_fixnum(garlic_value_t val);

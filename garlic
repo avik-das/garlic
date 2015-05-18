@@ -82,11 +82,6 @@ module AST
   # The set of all variable names available in all lexical scopes throughout
   # each program. These are added by stdlib.c.
   GLOBAL_SYMBOLS = Set.new([
-    :+,
-    :-,
-    :*,
-    :'=',
-
     :display
   ])
 

@@ -9,12 +9,6 @@
 
 # stdlib functions
 
-         .global cdecl(stdlib_sum)
-         .global cdecl(stdlib_difference)
-         .global cdecl(stdlib_mul)
-
-         .global cdecl(stdlib_equal_sign)
-
          .global cdecl(stdlib_display)
 
          .global cdecl(value_to_native_int)
@@ -98,42 +92,6 @@ gather_varargs_begin:                   #   so save the original value too
 gather_varargs_done:
         mov     %rsi, %rax              # return the resulting list
         mov     %r10, %rsi              # restore the number of arguments
-        ret
-
-cdecl(stdlib_sum):
-        # ignore the pushed frame
-        movq    $0, %rdi
-        call    cdecl(gather_varargs)
-        mov     %rax, %rdi
-        call    cdecl(stdlib_impl_sum)
-        add     $8, %rsp
-        ret
-
-cdecl(stdlib_difference):
-        # ignore the pushed frame
-        movq    $0, %rdi
-        call    cdecl(gather_varargs)
-        mov     %rax, %rdi
-        call    cdecl(stdlib_impl_difference)
-        add     $8, %rsp
-        ret
-
-cdecl(stdlib_mul):
-        # ignore the pushed frame
-        movq    $0, %rdi
-        call    cdecl(gather_varargs)
-        mov     %rax, %rdi
-        call    cdecl(stdlib_impl_mul)
-        add     $8, %rsp
-        ret
-
-cdecl(stdlib_equal_sign):
-        # ignore the pushed frame
-        movq    $0, %rdi
-        call    cdecl(gather_varargs)
-        mov     %rax, %rdi
-        call    cdecl(stdlib_impl_equal_sign)
-        add     $8, %rsp
         ret
 
 cdecl(stdlib_display):

@@ -10,17 +10,8 @@
 
 typedef void * garlic_value_t;
 
-garlic_value_t stdlib_sum(garlic_value_t vals);
-garlic_value_t stdlib_difference(garlic_value_t vals);
-garlic_value_t stdlib_mul(garlic_value_t vals);
-garlic_value_t stdlib_equal_sign(garlic_value_t vals);
-
 garlic_value_t stdlib_display(garlic_value_t value);
 
-garlic_value_t stdlib_impl_sum(garlic_value_t vals);
-garlic_value_t stdlib_impl_difference(garlic_value_t vals);
-garlic_value_t stdlib_impl_mul(garlic_value_t vals);
-garlic_value_t stdlib_impl_equal_sign(garlic_value_t vals);
 garlic_value_t stdlib_impl_display(garlic_value_t value);
 
 int64_t value_to_native_int(garlic_value_t value);
@@ -80,11 +71,6 @@ struct frame_t * new_frame() {
 
 struct frame_t * new_root_frame() {
     struct frame_t *frame = new_frame();
-
-    add_to_frame(frame, "+", make_fn(frame, stdlib_sum, 0));
-    add_to_frame(frame, "-", make_fn(frame, stdlib_difference, 0));
-    add_to_frame(frame, "*", make_fn(frame, stdlib_mul, 0));
-    add_to_frame(frame, "=", make_fn(frame, stdlib_equal_sign, 0));
 
     add_to_frame(frame, "display", make_fn(frame, stdlib_display, 0));
 
@@ -264,102 +250,6 @@ garlic_value_t get_atom(char *name) {
 
 /** STANDARD FUNCTIONS ********************************************************/
 
-garlic_value_t stdlib_impl_sum(garlic_value_t vals) {
-    int64_t sum = 0;
-
-    struct garlic_cons *valslist = (struct garlic_cons *) vals;
-
-    while (valslist != NIL_VALUE) {
-        garlic_value_t val = valslist->car;
-        sum += ((int64_t) val) ^ 1;
-        valslist = valslist->cdr;
-    }
-
-    return (garlic_value_t) (sum | 1);
-}
-
-garlic_value_t stdlib_impl_difference(garlic_value_t vals) {
-    struct garlic_cons *valslist = (struct garlic_cons *) vals;
-
-    if (valslist == NIL_VALUE) {
-        printf("ERROR: - called with too few arguments");
-        exit(1);
-    }
-
-    // If only one argument is passed in, then return that number negated.
-
-    if (valslist->cdr == NIL_VALUE) {
-        int64_t raw_num = ((int64_t) valslist->car) ^ 1;
-        int64_t neg_num = 0 - raw_num;
-        return (garlic_value_t) (neg_num | 1);
-    }
-
-    // Otherwise, return the first number minus the sum of the rest of the
-    // numbers.
-
-    int64_t difference = ((int64_t) valslist->car) ^ 1;
-    valslist = valslist->cdr;
-
-    while (valslist != NIL_VALUE) {
-        garlic_value_t val = valslist->car;
-        difference -= ((int64_t) val) ^ 1;
-        valslist = valslist->cdr;
-    }
-
-    return (garlic_value_t) (difference | 1);
-}
-
-garlic_value_t stdlib_impl_mul(garlic_value_t vals) {
-    int64_t prod = 1;
-
-    struct garlic_cons *valslist = (struct garlic_cons *) vals;
-
-    while (valslist != NIL_VALUE) {
-        garlic_value_t val = valslist->car;
-        prod *= value_to_native_int(val);
-        valslist = valslist->cdr;
-    }
-
-    return (garlic_value_t) ((prod << 1) | 1);
-}
-
-garlic_value_t stdlib_impl_equal_sign(garlic_value_t vals) {
-    struct garlic_cons *valslist = (struct garlic_cons *) vals;
-    struct garlic_cons *item;
-
-    // There must be at least two items to check.
-    if (valslist == NIL_VALUE ||
-            valslist->cdr == NIL_VALUE) {
-        printf("ERROR: = called with too few arguments; at least two expected");
-        exit(1);
-    }
-
-    // All the items must be numbers.
-    item = valslist;
-    while (item != NIL_VALUE) {
-        if (!value_is_fixnum(item->car)) {
-            printf("ERROR: = can only compare numbers");
-            exit(1);
-        }
-
-        item = item->cdr;
-    }
-
-    // All the items must be equal to the first item.
-    int64_t first_value = (int64_t) valslist->car;
-    item = valslist->cdr;
-    while (item != NIL_VALUE) {
-        int64_t item_value = (int64_t) item->car;
-        if (item_value != first_value) {
-            return (garlic_value_t) FALSE_VALUE;
-        }
-
-        item = item->cdr;
-    }
-
-    return (garlic_value_t) TRUE_VALUE;
-}
-
 void display_cons_inner(struct garlic_cons *cons) {
     stdlib_impl_display(cons->car);
 
@@ -460,4 +350,9 @@ garlic_value_t garlic_cdr(garlic_value_t cons_val) {
     }
 
     return ((struct garlic_cons *) cons_val)->cdr;
+}
+
+int garlic_is_fixnum(garlic_value_t val) {
+    // TODO: move all the type verifications into userland
+    return value_is_fixnum(val);
 }
