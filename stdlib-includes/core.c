@@ -101,10 +101,10 @@ garlic_value_t equal_sign(
     return TRUE_VALUE;
 }
 
-garlic_value_t display(garlic_value_t val);
+void display_single(garlic_value_t val);
 
 void display_cons_inner(garlic_value_t cons) {
-    display(garlic_car(cons));
+    display_single(garlic_car(cons));
 
     garlic_value_t cdr_val = garlic_cdr(cons);
     if (cdr_val == NIL_VALUE) {
@@ -114,12 +114,11 @@ void display_cons_inner(garlic_value_t cons) {
         display_cons_inner(cdr_val);
     } else {
         printf(" . ");
-        display(cdr_val);
+        display_single(cdr_val);
     }
 }
 
-// TODO: varargs
-garlic_value_t display(garlic_value_t val) {
+void display_single(garlic_value_t val) {
     enum garlic_value_type type = garlic_get_type(val);
 
     if (val == NIL_VALUE) {
@@ -143,6 +142,15 @@ garlic_value_t display(garlic_value_t val) {
     } else if (type == GARLIC_TYPE_WRAPPED_NATIVE) {
         printf("#<native: %p>", garlic_unwrap_native(val));
     }
+}
+
+garlic_value_t display(garlic_value_t vals) {
+    while (vals != NIL_VALUE) {
+        garlic_value_t item = garlic_car(vals);
+        vals = garlic_cdr(vals);
+
+        display_single(item);
+    }
 
     return NIL_VALUE;
 }
@@ -158,6 +166,6 @@ garlic_native_export_t core_exports[] = {
     {"-", difference, 0, 1},
     {"*", product, 0, 1},
     {"=", equal_sign, 2, 1},
-    {"display", display, 1},
+    {"display", display, 0, 1},
     0
 };

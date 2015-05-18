@@ -2,10 +2,7 @@
 (newline)
 
 (define (display-with-tag tag message)
-  (display "[")
-  (display tag)
-  (display "] ")
-  (display message)
+  (display "[" tag "] " message)
   (newline))
 
 (define (display-all-with-tag tag . messages)

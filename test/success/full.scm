@@ -210,15 +210,13 @@
 (newline)
 
 (define (print-with-newline x)
-  (display "PRINT-WITH-NEWLINE: ")
-  (display x)
+  (display "PRINT-WITH-NEWLINE: " x)
   (newline))
 
 (print-with-newline 'hello)
 
 ((lambda (x)
-   (display "LAMBDA-VERSION: ")
-   (display x)
+   (display "LAMBDA-VERSION: " x)
    (newline)) "hello again")
 
 ;; Scoped definitions
@@ -318,9 +316,7 @@
 ; statements.
 
 (let ((hello "hello"))
-      (display hello)
-      (display " ")
-      (display world)
+      (display hello " " world)
       (newline)
 
       (define world "world"))
@@ -343,9 +339,7 @@
 ; statements.
 
 (let* ((hello "hello"))
-       (display hello)
-       (display " ")
-       (display world)
+       (display hello " " world)
        (newline)
 
        (define world "world"))
