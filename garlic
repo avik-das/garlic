@@ -1300,11 +1300,20 @@ module AST
       asm "        movlabelreg(cdecl(#{module_base_name}_exports), %rax)"
       @c_exports.each_with_index do |exp, i|
         asm "        push    %rax"
+
+        # make a lambda using the root frame as the parent frame
         asm "        movlabelreg(#{wrapper_prefix}_root_frame, %rdi)"
         asm "        movq    (%rdi), %rdi"
-        asm "        movq    (%rax), %rsi"
-        asm "        movlabelreg(#{wrapper_prefix}_native_fn_#{i}, %rdx)"
-        asm "        call    cdecl(add_native_function_to_frame)"
+        asm "        movlabelreg(#{wrapper_prefix}_native_fn_#{i}, %rsi)"
+        asm "        call    cdecl(make_fn)"
+
+        asm "        movlabelreg(#{wrapper_prefix}_root_frame, %rdi)"
+        asm "        movq    (%rdi), %rdi" # (1) root frame
+        asm "        movq    (%rsp), %rsi" # (2) name of...
+        asm "        movq    (%rsi), %rsi" #     ...native function
+        asm "        movq    %rax, %rdx"   # (3) lambda
+        asm "        call    cdecl(add_to_frame)"
+
         asm "        pop     %rax"
         asm "        add     $24, %rax"
       end
@@ -1682,7 +1691,6 @@ module AST
 
       vm.argframe
       vm.movlabelreg name, "%rsi"
-      vm.asm "        mov     $0, %rdx" # not native
       vm.with_aligned_stack do
         vm.call "make_fn"
       end

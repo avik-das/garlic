@@ -11,8 +11,7 @@ struct frame_t {
     struct frame_t *parent;
 };
 
-garlic_value_t make_fn(struct frame_t *parent_frame, void *fnpointer,
-        int is_native);
+garlic_value_t make_fn(struct frame_t *parent_frame, void *fnpointer);
 
 garlic_value_t find_in_frame(struct frame_t *frame, char *str) {
     //printf("looking up var \"%s\" in frame %p!\n", str, frame);
@@ -37,16 +36,6 @@ garlic_value_t find_in_frame(struct frame_t *frame, char *str) {
 void add_to_frame(struct frame_t *frame, char *str, garlic_value_t value) {
     //printf("adding var \"%s\" w/ value %p to frame %p!\n", str, value, frame);
     hashmap_put(frame->vars, str, value);
-}
-
-void add_native_function_to_frame(
-        struct frame_t *frame,
-        char *str,
-        void *fnpointer) {
-    //printf("adding native fn \"%s\" w/ value %p to frame %p!\n",
-    //        str, fnpointer, frame);
-
-    hashmap_put(frame->vars, str, make_fn(frame, fnpointer, 1));
 }
 
 struct frame_t * new_frame() {
@@ -82,7 +71,6 @@ struct garlic_lambda {
     struct garlic_value super;
     struct frame_t *parent_frame;
     void *function;
-    int64_t is_native;
 };
 
 struct garlic_atom {
@@ -106,15 +94,13 @@ struct garlic_wrapped_native {
     void *native_val;
 };
 
-garlic_value_t make_fn(struct frame_t *parent_frame, void *fnpointer,
-        int is_native) {
+garlic_value_t make_fn(struct frame_t *parent_frame, void *fnpointer) {
     struct garlic_lambda *fn = (struct garlic_lambda *)
         malloc(sizeof(struct garlic_lambda));
 
     fn->super.type = GARLIC_TYPE_LAMBDA;
     fn->parent_frame = parent_frame;
     fn->function = fnpointer;
-    fn->is_native = is_native;
 
     //printf("returning wrapped lambda %p pointing to %p and parent frame %p\n",
     //        fn, fnpointer, parent_frame);
