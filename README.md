@@ -467,3 +467,43 @@ Once such a C module exists, it can be imported and used like any other module.
 ```
 
 Like any other import, importing C modules supports renaming and the "import all" syntax.
+
+Functions declared in C modules can be variadic as well. To achieve this, when exporting a variadic function, the entry must include the `is_vararg` flag set to `1`. This flag is the fourth field of the `garlic_native_export_t` struct. A variadic function can still accept a certain number of required arguments, and this number is still the number of arguments it accepts, as specified by the second field of the export struct.
+
+Once the `is_vararg` flag is set, the resulting function takes one more argument than the number specified in the export struct, and that parameter is guaranteed to be a `cons` list, which can be traversed using the relevant functions declared in `garlic.h`.
+
+```c
+#include <garlic.h>
+
+garlic_value_t variadic(garlic_value_t a, garlic_value_t rest) {
+    int64_t a_val = garlicval_to_int(a);
+
+    int64_t num_rest = 0;
+    while (rest != NIL_VALUE) {
+        num_rest++;
+        rest = garlic_cdr(rest);
+    }
+
+    return int_to_garlicval(a_val + num_rest);
+}
+
+garlic_native_export_t garlic_c_exports[] = {
+    {"variadic", variadic, 1, 1},
+    0
+};
+```
+
+```scheme
+(require "garlic_c")
+
+(garlic_c:variadic 10 2 3 4) ; -> 13
+```
+
+Just like the `stdlib` module is imported implicitly, there is an implicit `(require core *)` at the top of all modules, where `core` is a C module. Again, the "import all" syntax means that references to core functions can be prefixed by the module name.
+
+```scheme
+; no import
+
+(display (+ 1 2)) (newline)
+(core:display (core:+ 1 2)) (newline)
+```
