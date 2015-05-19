@@ -181,6 +181,31 @@ garlic_value_t arg8(
     return int_to_garlicval(sum);
 }
 
+garlic_value_t callme5(garlic_value_t fn) {
+    garlic_value_t args[] = {
+        int_to_garlicval(1),
+        int_to_garlicval(2),
+        int_to_garlicval(3),
+        int_to_garlicval(4),
+        int_to_garlicval(5)
+    };
+
+    return garlic_call_function(fn, args, 5);
+}
+
+garlic_value_t callme6(garlic_value_t fn) {
+    garlic_value_t args[] = {
+        int_to_garlicval(1),
+        int_to_garlicval(2),
+        int_to_garlicval(3),
+        int_to_garlicval(4),
+        int_to_garlicval(5),
+        int_to_garlicval(6)
+    };
+
+    return garlic_call_function(fn, args, 6);
+}
+
 garlic_native_export_t libc_module_exports[] = {
     {"add", add, 2},
     {"lastarg12", lastarg12, 12},
@@ -192,5 +217,7 @@ garlic_native_export_t libc_module_exports[] = {
     {"arg5", arg5, 5},
     {"arg6", arg6, 6},
     {"arg8", arg8, 8},
+    {"callme5", callme5, 1},
+    {"callme6", callme6, 1},
     0
 };

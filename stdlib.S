@@ -6,6 +6,7 @@
 
          .global cdecl(garlic_fncall)
          .global cdecl(gather_varargs)
+         .global cdecl(garlic_call_function)
          .global cdecl(garlicval_to_int)
 
          .text
@@ -87,6 +88,35 @@ gather_varargs_begin:                   #   so save the original value too
 gather_varargs_done:
         mov     %rsi, %rax              # return the resulting list
         mov     %r10, %rsi              # restore the number of arguments
+        ret
+
+cdecl(garlic_call_function):
+        mov     %rdx, %r12              # %r12 is callee-saved
+        test    $1, %r12                # check if the number of arguments...
+        jnz     garlic_call_function_odd_args # ...is even or odd
+        sub     $8, %rsp                # align the stack if even
+        add     $1, %r12                # remember that we aligned the stack
+garlic_call_function_odd_args:
+        shlq    $3, %r12                # multiply by 8 (# of bytes per arg)
+
+        mov     %rdx, %r9               # start with the number of arguments
+        sub     $1, %r9                 # subtract one to avoid fence-post
+        shlq    $3, %r9                 # multiply by 8 (# of bytes per arg)
+        add     %r9, %rsi               # this is the address of the last arg!
+        mov     %rdx, %r8               # counter for number of arguments
+garlic_call_function_begin:             # we'll push arguments in reverse order
+        cmp     $0, %r8                 # when we've exhausted the args...
+        je      garlic_call_function_done # ...finish the loop
+
+        mov     (%rsi), %r10            # grab the current argument
+        push    %r10                    # push it onto the stack
+        sub     $8, %rsi                # go to the previous argument
+        sub     $1, %r8                 # decrement the counter
+        jmp     garlic_call_function_begin
+garlic_call_function_done:
+        mov     %rdx, %rsi              # garlic_fncall expects the second...
+        call    cdecl(garlic_fncall)    # ...argument to be the number of args
+        add     %r12, %rsp              # remove the arguments from the stack
         ret
 
 cdecl(garlicval_to_int):

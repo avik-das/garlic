@@ -1,4 +1,5 @@
 #include <inttypes.h>
+#include <stddef.h>
 
 typedef struct garlic_native_export {
     char *name;
@@ -62,3 +63,10 @@ garlic_value_t garlic_make_cons(garlic_value_t car_val, garlic_value_t cdr_val);
 garlic_value_t garlic_car(garlic_value_t cons_val);
 /* Retrieve the second element of a cons cell. */
 garlic_value_t garlic_cdr(garlic_value_t cons_val);
+
+/* Calls the provided lambda with the given arguments. The return value of the
+ * function call is then returned to the caller. */
+garlic_value_t garlic_call_function(
+        garlic_value_t lambda,
+        garlic_value_t *args,
+        size_t num_args);
