@@ -1463,7 +1463,7 @@ module AST
       vm.movlabelreg "#{name}_contents", "%rdi"
 
       vm.with_aligned_stack do
-        vm.call "make_string_with_contents"
+        vm.call "garlic_wrap_string"
       end
     end
   end

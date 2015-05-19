@@ -118,16 +118,6 @@ garlic_value_t make_atom_from_name(char *name) {
     return atom;
 }
 
-garlic_value_t make_string_with_contents(const char *contents) {
-    struct garlic_string *string = (struct garlic_string *)
-        malloc(sizeof(struct garlic_string));
-
-    string->super.type = GARLIC_TYPE_STRING;
-    string->contents = contents;
-
-    return string;
-}
-
 /** QUOTED ATOMS **************************************************************/
 
 map_t atom_db;
@@ -152,6 +142,11 @@ garlic_value_t get_atom(char *name) {
 
 /** USERLAND FUNCTIONS ********************************************************/
 
+garlic_value_t garlic_empty_string = &(struct garlic_string) {
+    {GARLIC_TYPE_STRING},
+    ""
+};
+
 garlic_value_t garlic_wrap_native(void *native_val) {
     struct garlic_wrapped_native *wrapped = (struct garlic_wrapped_native *)
         malloc(sizeof(struct garlic_wrapped_native));
@@ -160,6 +155,16 @@ garlic_value_t garlic_wrap_native(void *native_val) {
     wrapped->native_val = native_val;
 
     return wrapped;
+}
+
+garlic_value_t garlic_wrap_string(const char *contents) {
+    struct garlic_string *string = (struct garlic_string *)
+        malloc(sizeof(struct garlic_string));
+
+    string->super.type = GARLIC_TYPE_STRING;
+    string->contents = contents;
+
+    return string;
 }
 
 const char * garlic_unwrap_string(garlic_value_t wrapped) {

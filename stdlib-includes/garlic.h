@@ -47,6 +47,13 @@ garlic_value_t garlic_wrap_native(void *native_val);
  * "garlic_wrap_native". */
 void * garlic_unwrap_native(garlic_value_t wrapped);
 
+/* Wrap a string into a value of type garlic_value_t. */
+garlic_value_t garlic_wrap_string(const char *contents);
+
+/* To avoid having to re-allocate a garlic_value_t each time, the wrapped
+ * empty string is always available as a constant. */
+garlic_value_t garlic_empty_string;
+
 /* Given a value of type garlic_value_t, get back the C string contained
  * within. */
 const char * garlic_unwrap_string(garlic_value_t wrapped);
