@@ -7,6 +7,12 @@ garlic_value_t nullp(garlic_value_t value) {
         (garlic_value_t) FALSE_VALUE;
 }
 
+garlic_value_t symbolp(garlic_value_t value) {
+    return garlic_get_type(value) == GARLIC_TYPE_ATOM ?
+        TRUE_VALUE :
+        FALSE_VALUE;
+}
+
 garlic_value_t sum(garlic_value_t vals) {
     int64_t sum = 0;
 
@@ -159,13 +165,17 @@ garlic_value_t display(garlic_value_t vals) {
 // not need to be re-implemented here.
 garlic_native_export_t core_exports[] = {
     {"null?", nullp, 1},
+    {"symbol?", symbolp, 1},
+
     {"cons", garlic_make_cons, 2},
     {"car", garlic_car, 1},
     {"cdr", garlic_cdr, 1},
+
     {"+", sum, 0, 1},
     {"-", difference, 0, 1},
     {"*", product, 0, 1},
     {"=", equal_sign, 2, 1},
+
     {"display", display, 0, 1},
     0
 };
