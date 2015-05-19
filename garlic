@@ -2316,7 +2316,7 @@ def run_gcc(out_filename, compiler_opts)
   base = compiler_dir
   system(
     "gcc -g -I #{base}/stdlib-includes " +
-      "build/* #{base}/stdlib.c #{base}/stdlib.S #{base}/hashmap.c " +
+      "build/* #{base}/runtime.c #{base}/runtime.S #{base}/hashmap.c " +
       "#{compiler_opts.join(" ")} " +
       "-o #{out_filename}"
   )
