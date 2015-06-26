@@ -16,5 +16,8 @@
 (define (private-method)
   "this is a private method")
 
+(define auxillary-symbol 'auxillary-symbol)
+
 (module-export
-  auxillary-function)
+  auxillary-function
+  auxillary-symbol)

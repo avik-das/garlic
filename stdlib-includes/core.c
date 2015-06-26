@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 #include <garlic.h>
 
 garlic_value_t nullp(garlic_value_t value) {
@@ -70,6 +71,24 @@ garlic_value_t product(garlic_value_t vals) {
     return int_to_garlicval(prod);
 }
 
+// This check applies to types that can be compared by identity, such as
+// fixnums and symbols. This function won't check that all the values have the
+// same type, because if they are identical, they already have the same type.
+garlic_value_t equal_sign_identity(
+        garlic_value_t reference,
+        garlic_value_t vals) {
+    while (vals != NIL_VALUE) {
+        garlic_value_t item = garlic_car(vals);
+        vals = garlic_cdr(vals);
+
+        if (item != reference) {
+            return FALSE_VALUE;
+        }
+    }
+
+    return TRUE_VALUE;
+}
+
 garlic_value_t equal_sign(
         garlic_value_t a,
         garlic_value_t b,
@@ -78,33 +97,14 @@ garlic_value_t equal_sign(
     vals = garlic_make_cons(b, vals);
     vals = garlic_make_cons(a, vals);
 
-    garlic_value_t item;
-
-    // All the items must be numbers.
-    item = vals;
-    while (item != NIL_VALUE) {
-        if (garlic_get_type(garlic_car(item)) != GARLIC_TYPE_FIXNUM) {
-            // TODO: this will one day become a real error
-            printf("ERROR: = can only compare numbers");
+    switch (garlic_get_type(a)) {
+        case GARLIC_TYPE_FIXNUM:
+        case GARLIC_TYPE_ATOM:
+            return equal_sign_identity(a, vals);
+        default:
+            printf("ERROR: = can only compare numbers and symbols");
             return NIL_VALUE;
-        }
-
-        item = garlic_cdr(item);
     }
-
-    // All the items must be equal to the first item.
-    int64_t first_value = garlicval_to_int(garlic_car(vals));
-    item = garlic_cdr(vals);
-    while (item != NIL_VALUE) {
-        int64_t item_value = garlicval_to_int(garlic_car(item));
-        if (item_value != first_value) {
-            return FALSE_VALUE;
-        }
-
-        item = garlic_cdr(item);
-    }
-
-    return TRUE_VALUE;
 }
 
 void display_single(garlic_value_t val);
