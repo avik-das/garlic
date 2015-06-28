@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 #include <garlic.h>
 
 #include "hashmap.h"
@@ -65,6 +66,11 @@ struct frame_t * new_frame_with_parent(struct frame_t *parent) {
 
 struct garlic_value {
     enum garlic_value_type type;
+};
+
+struct garlic_double {
+    struct garlic_value super;
+    double value;
 };
 
 struct garlic_lambda {
@@ -141,6 +147,24 @@ garlic_value_t get_atom(char *name) {
 }
 
 /** USERLAND FUNCTIONS ********************************************************/
+
+double garlicval_to_double(garlic_value_t wrapped) {
+    if (garlic_get_type(wrapped) != GARLIC_TYPE_DOUBLE) {
+        return NAN;
+    }
+
+    return ((struct garlic_double *) wrapped)->value;
+}
+
+garlic_value_t double_to_garlicval(double flt) {
+    struct garlic_double *wrapped = (struct garlic_double *)
+        malloc(sizeof(struct garlic_double));
+
+    wrapped->super.type = GARLIC_TYPE_DOUBLE;
+    wrapped->value = flt;
+
+    return wrapped;
+}
 
 garlic_value_t garlic_empty_string = &(struct garlic_string) {
     {GARLIC_TYPE_STRING},

@@ -14,6 +14,7 @@ enum garlic_value_type {
     GARLIC_TYPE_NIL,
     GARLIC_TYPE_BOOLEAN,
     GARLIC_TYPE_FIXNUM,
+    GARLIC_TYPE_DOUBLE,
     GARLIC_TYPE_LAMBDA,
     GARLIC_TYPE_ATOM,
     GARLIC_TYPE_STRING,
@@ -33,6 +34,12 @@ int64_t garlicval_to_int(garlic_value_t n);
 
 /* Convert an int64_t into a value of type garlic_value_t. */
 #define int_to_garlicval(n) ((garlic_value_t) (((n) << 1) | 1))
+
+/* Convert a value of type garlic_value_t into a double. */
+double garlicval_to_double(garlic_value_t val);
+
+/* Convert a double into a value of type garlic_value_t. */
+garlic_value_t double_to_garlicval(double flt);
 
 /* Wrap a pointer into a structure that can be passed to Garlic. This value
  * will not be usable in Garlic, but it can be passed back to the C module and

@@ -135,6 +135,8 @@ void display_single(garlic_value_t val) {
         printf("#f");
     } else if (type == GARLIC_TYPE_FIXNUM) {
         printf("%" PRId64, garlicval_to_int(val));
+    } else if (type == GARLIC_TYPE_DOUBLE) {
+        printf("%f", garlicval_to_double(val));
     } else if (type == GARLIC_TYPE_STRING) {
         printf("%s", garlic_unwrap_string(val));
     } else if (type == GARLIC_TYPE_LAMBDA) {

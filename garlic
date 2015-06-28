@@ -14,6 +14,20 @@ class GarlicParser < Parslet::Parser
   rule(:space)     { match('\s').repeat(1) }
   rule(:space?)    { space.maybe }
 
+  rule(:float)     {
+    (
+      match('[+-]').maybe >>
+        match('[0-9]').repeat(1) >>
+        str('.') >>
+        match('[0-9]').repeat(1) >>
+        (
+          match('[eE]') >>
+            match('[+-]').maybe >>
+            match('[0-9]').repeat(1)
+        ).maybe
+    ).as(:float)
+  }
+
   rule(:int)       { (match('[+-]').maybe >> match('[0-9]').repeat(1)).as(:int) }
   rule(:bool)      { str('#t').as(:true) | str('#f').as(:false) }
 
@@ -69,7 +83,7 @@ class GarlicParser < Parslet::Parser
     str(';') >> match('[^\n]').repeat(1).maybe.as(:comment) >> str("\n")
   }
 
-  rule(:atom)      { int | bool | var }
+  rule(:atom)      { float | int | bool | var }
   rule(:expr)      { atom | list | dotlist | quoted | string | comment }
   rule(:expr_list) { ((space? >> expr).repeat(1).maybe >> space?).as(:exprs) }
 
@@ -506,6 +520,22 @@ module AST
   end
 
   class IntVal < Node
+    def initialize(value)
+      @value = value
+    end
+
+    def to_s
+      @value.to_s
+    end
+
+    def specialized_quoted
+      self
+    end
+
+    attr :value
+  end
+
+  class FloatVal < Node
     def initialize(value)
       @value = value
     end
@@ -1161,19 +1191,20 @@ module AST
   end
 
   class ASTTransform < Parslet::Transform
-    rule(var: simple(:name))  { Var.new(name.to_s.intern) }
-    rule(int: simple(:value)) { IntVal.new(value.to_i) }
-    rule(true: simple(:x))    { TrueVal.instance }
-    rule(false: simple(:x))   { FalseVal.instance }
+    rule(var: simple(:name))    { Var.new(name.to_s.intern) }
+    rule(int: simple(:value))   { IntVal.new(value.to_i) }
+    rule(float: simple(:value)) { FloatVal.new(value.to_f) }
+    rule(true: simple(:x))      { TrueVal.instance }
+    rule(false: simple(:x))     { FalseVal.instance }
 
-    rule(list: sequence(:x))  { NestedNode.new(*x) }
-    rule(dotlist: sequence(:x))  { DottedList.new(*x) }
+    rule(list: sequence(:x))    { NestedNode.new(*x) }
+    rule(dotlist: sequence(:x)) { DottedList.new(*x) }
 
-    rule(quoted: simple(:q))  { Quoted.new(q) }
-    rule(string: simple(:s))  { String.new(s) }
+    rule(quoted: simple(:q))    { Quoted.new(q) }
+    rule(string: simple(:s))    { String.new(s) }
 
-    rule(comment: simple(:c)) { Comment.new(c) }
-    rule(exprs: sequence(:x)) { GarlicModule.new(*x) }
+    rule(comment: simple(:c))   { Comment.new(c) }
+    rule(exprs: sequence(:x))   { GarlicModule.new(*x) }
   end
 
   def AST.construct_from_parse_tree(tree, filename, included_modules)
@@ -1557,6 +1588,26 @@ module AST
       # TODO: large numbers
       val = (@value << 1) | 0x1
       vm.asm "        mov     $#{val}, %rax"
+    end
+  end
+
+  class FloatVal < Node
+    def codegen(vm, program, all_modules)
+      vm.with_aligned_stack do
+        # We can't load a literal into %xmm0. Another option is to store the
+        # constant in the .data section, then load it. However, using the
+        # standard movlabelreg macro doesn't seem to be working without
+        # requiring some dereferencing, meaning we need two instructions to
+        # load the value anyway.
+        #
+        # In the future, if this is a bottleneck, it can be figured out how to
+        # load it in one instruction.
+
+        bitstring = [@value].pack('G').unpack('H16').first
+        vm.asm "        mov     $0x#{bitstring}, %rax"
+        vm.asm "        mov     %rax, %xmm0"
+        vm.call "double_to_garlicval"
+      end
     end
   end
 
