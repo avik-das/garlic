@@ -64,7 +64,7 @@ Data types in garlic consist of atoms and s-expressions.
 
 The first type of atom is the integer. An integer can be positive or negative, and currently, may only be within the range of `-2^62` to `2^62 - 1`. In the future, integers outside of this range may be promoted to some type of arbitrary-precision integer.
 
-Floating point and fractional numbers are not supported at this time.
+Additionally, floating point numbers are supported. These numbers are double-precision (64-bit) IEEE 754 floating point values. All floating point numbers must have a digit to the left and the to the right of the decimal point, and may optionally have an exponent denoted by a (case-insensitive) `e`.
 
 ```scheme
 1
@@ -74,6 +74,20 @@ Floating point and fractional numbers are not supported at this time.
 -3
 -4
 -200
+
+1.234
+-0.1234
+1234.0
+-1.234e3
+1.234E-3
+```
+
+Note that arithmetic expressions comprising of both types of numbers will implicitly convert to a floating point number:
+
+```scheme
+(+ 1 2)     ; stays an integer
+(+ 1.0 2.0) ; stays a float
+(+ 1.0 2)   ; result is a float
 ```
 
 The next type of atom is the boolean.
