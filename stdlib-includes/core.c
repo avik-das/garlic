@@ -15,16 +15,29 @@ garlic_value_t symbolp(garlic_value_t value) {
 }
 
 garlic_value_t sum(garlic_value_t vals) {
-    int64_t sum = 0;
+    int64_t intsum = 0;
+    double dblsum = 0.0;
+
+    int is_float = 0;
 
     while (vals != NIL_VALUE) {
         garlic_value_t val = garlic_car(vals);
         vals = garlic_cdr(vals);
 
-        sum += garlicval_to_int(val);
+        enum garlic_value_type type = garlic_get_type(val);
+
+        if (type == GARLIC_TYPE_DOUBLE) {
+            is_float = 1;
+            dblsum += garlicval_to_double(val);
+        } else if (type == GARLIC_TYPE_FIXNUM) {
+            intsum += garlicval_to_int(val);
+            dblsum += (double) garlicval_to_int(val);
+        }
     }
 
-    return int_to_garlicval(sum);
+    return is_float ?
+        double_to_garlicval(dblsum) :
+        int_to_garlicval(intsum);
 }
 
 garlic_value_t difference(garlic_value_t vals) {
@@ -37,38 +50,87 @@ garlic_value_t difference(garlic_value_t vals) {
     // If only one argument is passed in, then return that number negated.
 
     if (garlic_cdr(vals) == NIL_VALUE) {
-        int64_t raw_num = garlicval_to_int(garlic_car(vals));
-        int64_t neg_num = 0 - raw_num;
-        return int_to_garlicval(neg_num);
+        garlic_value_t raw_val = garlic_car(vals);
+
+        enum garlic_value_type type = garlic_get_type(raw_val);
+
+        if (type == GARLIC_TYPE_DOUBLE) {
+            double raw_num = garlicval_to_double(raw_val);
+            double neg_num = 0 - raw_num;
+            return double_to_garlicval(neg_num);
+        } else if (type == GARLIC_TYPE_FIXNUM) {
+            int64_t raw_num = garlicval_to_int(raw_val);
+            int64_t neg_num = 0 - raw_num;
+            return int_to_garlicval(neg_num);
+        }
     }
 
     // Otherwise, return the first number minus the sum of the rest of the
     // numbers.
 
-    int64_t difference = garlicval_to_int(garlic_car(vals));
+    int64_t intdiff = 0;
+    double dbldiff = 0.0;
+
+    int is_float = 0;
+
+    garlic_value_t raw_val = garlic_car(vals);
+    enum garlic_value_type type = garlic_get_type(raw_val);
+
+    if (type == GARLIC_TYPE_DOUBLE) {
+        is_float = 1;
+        // it doesn't matter what intdiff is
+        dbldiff = garlicval_to_double(raw_val);
+    } else if (type == GARLIC_TYPE_FIXNUM) {
+        intdiff = garlicval_to_int(raw_val);
+        dbldiff = (double) garlicval_to_int(raw_val);
+    }
+
     vals = garlic_cdr(vals);
 
     while (vals != NIL_VALUE) {
         garlic_value_t val = garlic_car(vals);
         vals = garlic_cdr(vals);
 
-        difference -= garlicval_to_int(val);
+        enum garlic_value_type type = garlic_get_type(val);
+
+        if (type == GARLIC_TYPE_DOUBLE) {
+            is_float = 1;
+            dbldiff -= garlicval_to_double(val);
+        } else if (type == GARLIC_TYPE_FIXNUM) {
+            intdiff -= garlicval_to_int(val);
+            dbldiff -= (double) garlicval_to_int(val);
+        }
     }
 
-    return int_to_garlicval(difference);
+    return is_float ?
+        double_to_garlicval(dbldiff) :
+        int_to_garlicval(intdiff);
 }
 
 garlic_value_t product(garlic_value_t vals) {
-    int64_t prod = 1;
+    int64_t intprod = 1;
+    double dblprod = 1.0;
+
+    int is_float = 0;
 
     while (vals != NIL_VALUE) {
         garlic_value_t val = garlic_car(vals);
         vals = garlic_cdr(vals);
 
-        prod *= garlicval_to_int(val);
+        enum garlic_value_type type = garlic_get_type(val);
+
+        if (type == GARLIC_TYPE_DOUBLE) {
+            is_float = 1;
+            dblprod *= garlicval_to_double(val);
+        } else if (type == GARLIC_TYPE_FIXNUM) {
+            intprod *= garlicval_to_int(val);
+            dblprod *= (double) garlicval_to_int(val);
+        }
     }
 
-    return int_to_garlicval(prod);
+    return is_float ?
+        double_to_garlicval(dblprod) :
+        int_to_garlicval(intprod);
 }
 
 // This check applies to types that can be compared by identity, such as
