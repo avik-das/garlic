@@ -141,7 +141,7 @@ void create_atom(char *name) {
 
 garlic_value_t get_atom(char *name) {
     garlic_value_t value_ptr = (garlic_value_t) malloc(sizeof(int64_t));
-    int get_result = hashmap_get(atom_db, name, &value_ptr);
+    hashmap_get(atom_db, name, &value_ptr);
 
     return value_ptr;
 }
