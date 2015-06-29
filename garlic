@@ -1605,7 +1605,7 @@ module AST
 
         bitstring = [@value].pack('G').unpack('H16').first
         vm.asm "        mov     $0x#{bitstring}, %rax"
-        vm.asm "        mov     %rax, %xmm0"
+        vm.asm "        movq    %rax, %xmm0"
         vm.call "double_to_garlicval"
       end
     end
