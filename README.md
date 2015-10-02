@@ -64,6 +64,8 @@ Data types in garlic consist of atoms and s-expressions.
 
 The first type of atom is the integer. An integer can be positive or negative, and currently, may only be within the range of `-2^62` to `2^62 - 1`. In the future, integers outside of this range may be promoted to some type of arbitrary-precision integer.
 
+Integers can also be expressed as hexadecimal values by prefixing them with `0x`. This prefix is case-sensitive, but the following characters are not.
+
 Additionally, floating point numbers are supported. These numbers are double-precision (64-bit) IEEE 754 floating point values. All floating point numbers must have a digit to the left and the to the right of the decimal point, and may optionally have an exponent denoted by a (case-insensitive) `e`.
 
 ```scheme
@@ -74,6 +76,10 @@ Additionally, floating point numbers are supported. These numbers are double-pre
 -3
 -4
 -200
+
+0x1
+0xff
+0xDEADBEEF
 
 1.234
 -0.1234

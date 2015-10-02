@@ -28,6 +28,7 @@ class GarlicParser < Parslet::Parser
     ).as(:float)
   }
 
+  rule(:hex)       { (str('0x') >> match('[0-9a-fA-F]').repeat(1)).as(:hex) }
   rule(:int)       { (match('[+-]').maybe >> match('[0-9]').repeat(1)).as(:int) }
   rule(:bool)      { str('#t').as(:true) | str('#f').as(:false) }
 
@@ -83,7 +84,7 @@ class GarlicParser < Parslet::Parser
     str(';') >> match('[^\n]').repeat(1).maybe.as(:comment) >> str("\n")
   }
 
-  rule(:atom)      { float | int | bool | var }
+  rule(:atom)      { float | hex | int | bool | var }
   rule(:expr)      { atom | list | dotlist | quoted | string | comment }
   rule(:expr_list) { ((space? >> expr).repeat(1).maybe >> space?).as(:exprs) }
 
@@ -1192,6 +1193,7 @@ module AST
 
   class ASTTransform < Parslet::Transform
     rule(var: simple(:name))    { Var.new(name.to_s.intern) }
+    rule(hex: simple(:value))   { IntVal.new(value.to_s.to_i(16)) }
     rule(int: simple(:value))   { IntVal.new(value.to_i) }
     rule(float: simple(:value)) { FloatVal.new(value.to_f) }
     rule(true: simple(:x))      { TrueVal.instance }
