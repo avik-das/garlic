@@ -14,6 +14,12 @@ garlic_value_t symbolp(garlic_value_t value) {
         FALSE_VALUE;
 }
 
+garlic_value_t consp(garlic_value_t value) {
+    return garlic_get_type(value) == GARLIC_TYPE_CONS ?
+        TRUE_VALUE :
+        FALSE_VALUE;
+}
+
 garlic_value_t sum(garlic_value_t vals) {
     int64_t intsum = 0;
     double dblsum = 0.0;
@@ -230,6 +236,7 @@ garlic_value_t display(garlic_value_t vals) {
 garlic_native_export_t core_exports[] = {
     {"null?", nullp, 1},
     {"symbol?", symbolp, 1},
+    {"cons?", consp, 1},
 
     {"cons", garlic_make_cons, 2},
     {"car", garlic_car, 1},
