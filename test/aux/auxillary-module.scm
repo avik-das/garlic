@@ -19,5 +19,6 @@
 (define auxillary-symbol 'auxillary-symbol)
 
 (module-export
+  ; exports
   auxillary-function
   auxillary-symbol)

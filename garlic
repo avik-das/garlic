@@ -347,6 +347,7 @@ module AST
         exp
           .children
           .drop(1)
+          .reject { |child| child.is_a?(Comment) }
           .map(&:name)
       }.flatten
     end
