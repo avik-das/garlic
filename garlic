@@ -625,6 +625,8 @@ module AST
               Cond.new(*filtered_children)
             when :and
               And.new(*filtered_children)
+            when :or
+              Or.new(*filtered_children)
             when :let
               Let.new(:bare, *filtered_children)
             when :'let*'
@@ -1073,6 +1075,34 @@ module AST
       unless @children.size >= 2
         raise ParseException.new(
           "and must have at least 2 children, got #{@children.size}: " +
+            "(#{@children.join(" ")})")
+      end
+
+      @expressions = @children.drop(1).map(&:static_transformed)
+
+      self
+    end
+
+    def compute_names_in_scope(parent_names)
+      @names_in_scope = parent_names
+
+      @expressions.each do |exp|
+        exp.compute_names_in_scope(@names_in_scope)
+      end
+    end
+
+    attr :expressions
+  end
+
+  class Or < SpecializedNode
+    def initialize(*children)
+      @children = children
+    end
+
+    def static_transformed
+      unless @children.size >= 2
+        raise ParseException.new(
+          "or must have at least 2 children, got #{@children.size}: " +
             "(#{@children.join(" ")})")
       end
 
@@ -1909,6 +1939,24 @@ module AST
       vm.asm "#{end_label_name}_false:"
       vm.asm "        mov     $4, %rax"
 
+      vm.asm "#{end_label_name}:"
+    end
+  end
+
+  class Or < SpecializedNode
+    def codegen(vm, program, all_modules)
+      end_label_name = vm.genname('or')
+
+      @expressions.each_with_index do |exp, i|
+        vm.asm "#{end_label_name}_#{i}_false:"
+        exp.codegen(vm, program, all_modules)
+        vm.jfalsey("#{end_label_name}_#{i + 1}_false")
+        vm.asm "        mov     $2, %rax"
+        vm.asm "        jmp     #{end_label_name}"
+      end
+
+      vm.asm "#{end_label_name}_#{@expressions.size}_false:"
+      vm.asm "        mov     $4, %rax"
       vm.asm "#{end_label_name}:"
     end
   end

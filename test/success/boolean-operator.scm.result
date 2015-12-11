@@ -13,3 +13,17 @@ returning true... returning false... #f
 returning false... #f
 
 
+#t
+#t
+#t
+#f
+#t
+#f
+
+#f
+#f
+#t
+#t
+
+returning true... #t
+returning false... returning true... #t
