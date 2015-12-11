@@ -623,6 +623,8 @@ module AST
               If.new(*filtered_children)
             when :cond
               Cond.new(*filtered_children)
+            when :and
+              And.new(*filtered_children)
             when :let
               Let.new(:bare, *filtered_children)
             when :'let*'
@@ -1049,6 +1051,34 @@ module AST
   class CondElse < SpecializedNode
     def initialize(expressions)
       @expressions = expressions
+    end
+
+    def compute_names_in_scope(parent_names)
+      @names_in_scope = parent_names
+
+      @expressions.each do |exp|
+        exp.compute_names_in_scope(@names_in_scope)
+      end
+    end
+
+    attr :expressions
+  end
+
+  class And < SpecializedNode
+    def initialize(*children)
+      @children = children
+    end
+
+    def static_transformed
+      unless @children.size >= 2
+        raise ParseException.new(
+          "and must have at least 2 children, got #{@children.size}: " +
+            "(#{@children.join(" ")})")
+      end
+
+      @expressions = @children.drop(1).map(&:static_transformed)
+
+      self
     end
 
     def compute_names_in_scope(parent_names)
@@ -1864,6 +1894,25 @@ module AST
     end
   end
 
+  class And < SpecializedNode
+    def codegen(vm, program, all_modules)
+      end_label_name = vm.genname('and')
+
+      @expressions.each do |exp|
+        exp.codegen(vm, program, all_modules)
+        vm.jfalsey("#{end_label_name}_false")
+      end
+
+      vm.asm "        mov     $2, %rax"
+      vm.asm "        jmp     #{end_label_name}"
+
+      vm.asm "#{end_label_name}_false:"
+      vm.asm "        mov     $4, %rax"
+
+      vm.asm "#{end_label_name}:"
+    end
+  end
+
   class Let < SpecializedNode
     def codegen(vm, program, all_modules)
       vm.argframe
@@ -2134,6 +2183,13 @@ module VM
       name = "#{@symbol_prefix}_#{type}_#{@current_name_index_by_type[type]}"
       @current_name_index_by_type[type] += 1
       name
+    end
+
+    def jfalsey(label)
+      asm "        cmp     $4, %rax"
+      asm "        je      #{label}"
+      asm "        cmp     $0, %rax"
+      asm "        je      #{label}"
     end
 
     def push(reg = nil)
