@@ -1667,7 +1667,7 @@ module AST
       # we have to reset the offset on the stack to the current frame in our
       # VM.
 
-      name = vm.genfnname
+      name = vm.genname('fn')
       endname = "#{name}_end"
 
       vm.asm "        jmp     #{endname}"
@@ -1801,7 +1801,7 @@ module AST
 
   class If < SpecializedNode
     def codegen(vm, program, all_modules)
-      label = vm.gencondname
+      label = vm.genname('if')
 
       @cond.codegen(vm, program, all_modules)
 
@@ -1821,7 +1821,7 @@ module AST
 
   class Cond < SpecializedNode
     def codegen(vm, program, all_modules)
-      label = vm.gencondname
+      label = vm.genname('cond')
 
       condition_labels = @conditions.each_with_index.map { |cond, index|
         if cond.is_a?(CondCondition)
@@ -1933,8 +1933,7 @@ module VM
       new_empty_frame
 
       # counters
-      @currfn = 0
-      @currcond = 0
+      @current_name_index_by_type = Hash.new(0)
 
       prologue
     end
@@ -2131,15 +2130,9 @@ module VM
       end
     end
 
-    def genfnname
-      name = "#{@symbol_prefix}_fn_#{@currfn}"
-      @currfn += 1
-      name
-    end
-
-    def gencondname
-      name = "#{@symbol_prefix}_cond_#{@currcond}"
-      @currcond += 1
+    def genname(type)
+      name = "#{@symbol_prefix}_#{type}_#{@current_name_index_by_type[type]}"
+      @current_name_index_by_type[type] += 1
       name
     end
 
