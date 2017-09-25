@@ -348,6 +348,28 @@ Finally, there is `letrec`, which makes all bindings available immediately. Note
   (is-odd? 11)) ; #t
 ```
 
+Let bindings can also _destructure_ values. If both a binding and its value are lists, the elements can be matched one-to-one with each other:
+
+```scheme
+; A dotted list consumes a list of remaining elements at the end
+(let (((a b . rest) '(1 2 3 4)))
+  (display a) (newline)     ; 1
+  (display b) (newline)     ; 2
+  (display rest) (newline)) ; (3 4)
+
+; A nil-terminated list consumes individual elements only
+(let (((a b c) '(1 2 3)))
+  (display a) (newline)  ; 1
+  (display b) (newline)  ; 2
+  (display c) (newline)) ; 3
+```
+
+Destructuring list bindings are currently in an early stage, with the following limitations:
+
+- Only a single level of nesting is supported, as show in the above examples.
+
+- There is very little error checking. In particular, mismatches in structure between the left and right-hand sides may or may not be handled correctly.
+
 ### Modules
 
 Garlic supports a full module system. A module consists of a single garlic file that defines a set of identifiers it wants to mark as visible to other garlic files. In the following module, `f` and `g` are exported by the `module-export` syntax, but `h` is not. By putting it a file called `my-module.scm`, this file defines the `my-module` module.

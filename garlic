@@ -412,6 +412,12 @@ module AST
       end
     end
 
+    # Can this syntax element be used as an lvalue in a binding operation, such
+    # as a `let`? Most syntax elements can only be used as rvalues.
+    def can_be_used_as_binding?
+      false
+    end
+
     attr_accessor :names_in_scope
   end
 
@@ -516,6 +522,10 @@ module AST
 
     def specialized_quoted
       QuotedAtom.new(@name)
+    end
+
+    def can_be_used_as_binding?
+      true
     end
 
     attr :name
@@ -671,6 +681,11 @@ module AST
       }.join(" ")
 
       "(#{children_str})"
+    end
+
+    def can_be_used_as_binding?
+      # Bindings only support one level of nesting
+      children.all? { |child| child.is_a?(Var) }
     end
 
     attr :children
@@ -1154,10 +1169,10 @@ module AST
               "#{binding.children.size}: (#{binding.children.join(" ")})")
         end
 
-        unless binding.children[0].is_a?(Var)
+        unless binding.children[0].can_be_used_as_binding?
           raise ParseException.new(
-            "Let binding must bind to a variable, got: " +
-              "(#{binding.children[0]})")
+            "Let binding must a valid left-hand value, got: " +
+              "#{binding.children[0]}")
         end
 
         name = binding.children[0]
@@ -1181,8 +1196,7 @@ module AST
       end
 
       binding_names = @bindings
-        .map(&:name)
-        .map(&:name)
+        .flat_map { |binding| names_created_in_binding(binding) }
       body_def_names = def_names_from_statements(@expressions)
       names_in_body_scope = Set.new(@names_in_scope)
       names_in_body_scope.merge(binding_names)
@@ -1198,8 +1212,8 @@ module AST
       # visible to other bindings. Only the current bound name is available
       # within the definition of the binding in order to allow for recursion.
       @bindings.each do |binding|
-        binding_name = binding.name.name
-        names_in_binding_scope = parent_names + [binding_name]
+        binding_names = names_created_in_binding(binding)
+        names_in_binding_scope = parent_names + binding_names
 
         binding.compute_names_in_scope(names_in_binding_scope)
       end
@@ -1211,8 +1225,8 @@ module AST
       names_in_binding_scope = Set.new(parent_names)
 
       @bindings.each do |binding|
-        binding_name = binding.name.name
-        names_in_binding_scope << binding_name
+        binding_names = names_created_in_binding(binding)
+        names_in_binding_scope += binding_names
 
         binding.compute_names_in_scope(names_in_binding_scope)
       end
@@ -1224,12 +1238,19 @@ module AST
       names_in_binding_scope = Set.new(parent_names)
 
       binding_names = @bindings
-        .map(&:name)
-        .map(&:name)
+        .flat_map { |binding| names_created_in_binding(binding) }
       names_in_binding_scope.merge(binding_names)
 
       @bindings.each do |binding|
         binding.compute_names_in_scope(names_in_binding_scope)
+      end
+    end
+
+    def names_created_in_binding(binding)
+      declarations = binding.name
+      case declarations
+      when Var then [declarations.name]
+      when DottedList, NestedNode then declarations.children.map(&:name)
       end
     end
 
@@ -1981,15 +2002,14 @@ module AST
         # generation, we can use the most efficient code, which is to just
         # evaluate the bindings in order and add them to new frame.
         bindings.each do |binding|
-          varname = vm.addvarname(binding.name)
-
+          # Generate the value that will be assigned to the left-hand side name
+          # or names.
           binding.value.codegen(vm, program, all_modules)
 
-          vm.argframe
-          vm.movlabelreg varname, "%rsi"
-          vm.asm "        mov     %rax, %rdx"
-          vm.with_aligned_stack do
-            vm.call "add_to_frame"
+          case binding.name
+          when Var then codegen_assignment_to_var(vm, binding)
+          when DottedList then codegen_assignment_to_dotted_list(vm, binding)
+          when NestedNode then codegen_assignment_to_list(vm, binding)
           end
         end
 
@@ -1999,6 +2019,72 @@ module AST
 
         vm.pop
         vm.remframe
+      end
+    end
+
+    def codegen_assignment_to_var(vm, binding)
+      varname = vm.addvarname(binding.name)
+
+      vm.argframe
+      vm.movlabelreg varname, "%rsi"
+      vm.asm "        mov     %rax, %rdx"
+      vm.with_aligned_stack do
+        vm.call "add_to_frame"
+      end
+    end
+
+    def codegen_assignment_to_dotted_list(vm, binding)
+      # %r12 is callee saved, so the call to "add_to_frame" won't overwrite
+      # the value we want to assign to the bindings.
+      vm.asm("        mov     %rax, %r12")
+
+      binding.name.children.each.with_index do |name, i|
+        varname = vm.addvarname(name)
+
+        vm.movlabelreg varname, "%rsi"
+
+        if i < binding.name.children.size - 1
+          # When the left-hand side is a dotted list with N entries, the first
+          # N - 1 entries are pulled off the right-hand side and assigned to
+          # those first variables...
+          vm.asm "        mov     8(%r12), %rdx"
+          vm.asm "        mov     16(%r12), %r12"
+        else
+          # ...and the last variable is assigned the rest of the list.
+          vm.asm "        mov     %r12, %rdx"
+        end
+
+        vm.argframe
+        vm.with_aligned_stack do
+          vm.call "add_to_frame"
+        end
+      end
+    end
+
+    def codegen_assignment_to_list(vm, binding)
+      # %r12 is callee saved, so the call to "add_to_frame" won't overwrite
+      # the value we want to assign to the bindings.
+      vm.asm("        mov     %rax, %r12")
+
+      binding.name.children.each do |name|
+        varname = vm.addvarname(name)
+
+        vm.movlabelreg varname, "%rsi"
+
+        # When the left-hand side is a nil-terminated list with N entries, the
+        # first N entries are pulled off the right-hand side and assigned to
+        # those variables.
+        vm.asm "        mov     8(%r12), %rdx"
+        vm.asm "        mov     16(%r12), %r12"
+
+        # Technically, the very last entry in the list is a `nil`, meaning we
+        # should check the last entry in the right-hand side to make sure it is
+        # also a `nil`. However, for now, ignore that condition.
+
+        vm.argframe
+        vm.with_aligned_stack do
+          vm.call "add_to_frame"
+        end
       end
     end
   end
