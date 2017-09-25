@@ -348,7 +348,7 @@ Finally, there is `letrec`, which makes all bindings available immediately. Note
   (is-odd? 11)) ; #t
 ```
 
-Let bindings can also _destructure_ values. If both a binding and its value are lists, the elements can be matched one-to-one with each other:
+Let bindings can also _destructure_ values. If both a binding and its value are lists, the elements can be recursively matched one-to-one with each other:
 
 ```scheme
 ; A dotted list consumes a list of remaining elements at the end
@@ -362,13 +362,16 @@ Let bindings can also _destructure_ values. If both a binding and its value are 
   (display a) (newline)  ; 1
   (display b) (newline)  ; 2
   (display c) (newline)) ; 3
+
+; Recursive destructuring is allowed
+(let (((a (b . c) . rest) '(1 (2 . 3) 4)))
+  (display a) (newline)     ; 1
+  (display b) (newline)     ; 2
+  (display c) (newline)     ; 3
+  (display rest) (newline)) ; (4)
 ```
 
-Destructuring list bindings are currently in an early stage, with the following limitations:
-
-- Only a single level of nesting is supported, as show in the above examples.
-
-- There is very little error checking. In particular, mismatches in structure between the left and right-hand sides may or may not be handled correctly.
+Note there is very little error checking currently. In particular, mismatches in structure between the left and right-hand sides may or may not be handled correctly.
 
 ### Modules
 

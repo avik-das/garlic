@@ -684,8 +684,7 @@ module AST
     end
 
     def can_be_used_as_binding?
-      # Bindings only support one level of nesting
-      children.all? { |child| child.is_a?(Var) }
+      children.all? { |child| child.can_be_used_as_binding? }
     end
 
     attr :children
@@ -1196,7 +1195,7 @@ module AST
       end
 
       binding_names = @bindings
-        .flat_map { |binding| names_created_in_binding(binding) }
+        .flat_map { |binding| names_created_in_binding_lvalue(binding.name) }
       body_def_names = def_names_from_statements(@expressions)
       names_in_body_scope = Set.new(@names_in_scope)
       names_in_body_scope.merge(binding_names)
@@ -1212,7 +1211,7 @@ module AST
       # visible to other bindings. Only the current bound name is available
       # within the definition of the binding in order to allow for recursion.
       @bindings.each do |binding|
-        binding_names = names_created_in_binding(binding)
+        binding_names = names_created_in_binding_lvalue(binding.name)
         names_in_binding_scope = parent_names + binding_names
 
         binding.compute_names_in_scope(names_in_binding_scope)
@@ -1225,7 +1224,7 @@ module AST
       names_in_binding_scope = Set.new(parent_names)
 
       @bindings.each do |binding|
-        binding_names = names_created_in_binding(binding)
+        binding_names = names_created_in_binding_lvalue(binding.name)
         names_in_binding_scope += binding_names
 
         binding.compute_names_in_scope(names_in_binding_scope)
@@ -1238,7 +1237,7 @@ module AST
       names_in_binding_scope = Set.new(parent_names)
 
       binding_names = @bindings
-        .flat_map { |binding| names_created_in_binding(binding) }
+        .flat_map { |binding| names_created_in_binding_lvalue(binding.name) }
       names_in_binding_scope.merge(binding_names)
 
       @bindings.each do |binding|
@@ -1246,11 +1245,13 @@ module AST
       end
     end
 
-    def names_created_in_binding(binding)
-      declarations = binding.name
-      case declarations
-      when Var then [declarations.name]
-      when DottedList, NestedNode then declarations.children.map(&:name)
+    def names_created_in_binding_lvalue(lvalue)
+      case lvalue
+      when Var then [lvalue.name]
+      when DottedList, NestedNode
+        lvalue
+          .children
+          .flat_map { |child| names_created_in_binding_lvalue(child) }
       end
     end
 
@@ -2005,12 +2006,7 @@ module AST
           # Generate the value that will be assigned to the left-hand side name
           # or names.
           binding.value.codegen(vm, program, all_modules)
-
-          case binding.name
-          when Var then codegen_assignment_to_var(vm, binding)
-          when DottedList then codegen_assignment_to_dotted_list(vm, binding)
-          when NestedNode then codegen_assignment_to_list(vm, binding)
-          end
+          codegen_single_non_destructuring_assignment(vm, binding.name, "rax")
         end
 
         expressions.each do |expression|
@@ -2022,71 +2018,96 @@ module AST
       end
     end
 
-    def codegen_assignment_to_var(vm, binding)
-      varname = vm.addvarname(binding.name)
+    def codegen_single_non_destructuring_assignment(vm, lvalue, source)
+      case lvalue
+      when Var
+        varname = vm.addvarname(lvalue)
 
-      vm.argframe
-      vm.movlabelreg varname, "%rsi"
-      vm.asm "        mov     %rax, %rdx"
-      vm.with_aligned_stack do
-        vm.call "add_to_frame"
+        vm.asm "        mov     %#{source}, %rdx"
+        vm.movlabelreg varname, "%rsi"
+
+        vm.argframe
+        vm.with_aligned_stack do
+          vm.call "add_to_frame"
+        end
+      when DottedList
+        if source != "rax"
+          vm.asm "        mov     %#{source}, %rax"
+        end
+
+        codegen_assignment_to_dotted_list(vm, lvalue)
+      when NestedNode
+        if source != "rax"
+          vm.asm "        mov     %#{source}, %rax"
+        end
+
+        codegen_assignment_to_list(vm, lvalue)
       end
     end
 
-    def codegen_assignment_to_dotted_list(vm, binding)
+    def codegen_single_destructuring_assignment(vm, lvalue, source)
+      case lvalue
+      when Var
+        varname = vm.addvarname(lvalue)
+
+        vm.asm "        mov     8(%#{source}), %rdx"
+        vm.asm "        mov     16(%#{source}), %#{source}"
+
+        vm.movlabelreg varname, "%rsi"
+
+        vm.argframe
+        vm.with_aligned_stack do
+          vm.call "add_to_frame"
+        end
+      when DottedList
+        vm.asm "        mov     8(%#{source}), %rax"
+        vm.asm "        mov     16(%#{source}), %#{source}"
+        vm.push("%#{source}")
+        codegen_assignment_to_dotted_list(vm, lvalue)
+        vm.pop("%#{source}")
+      when NestedNode
+        vm.asm "        mov     8(%#{source}), %rax"
+        vm.asm "        mov     16(%#{source}), %#{source}"
+        vm.push("%#{source}")
+        codegen_assignment_to_list(vm, lvalue)
+        vm.pop("%#{source}")
+      end
+    end
+
+    def codegen_assignment_to_dotted_list(vm, lvalue)
       # %r12 is callee saved, so the call to "add_to_frame" won't overwrite
       # the value we want to assign to the bindings.
       vm.asm("        mov     %rax, %r12")
 
-      binding.name.children.each.with_index do |name, i|
-        varname = vm.addvarname(name)
-
-        vm.movlabelreg varname, "%rsi"
-
-        if i < binding.name.children.size - 1
+      lvalue.children.each.with_index do |name, i|
+        if i < lvalue.children.size - 1
           # When the left-hand side is a dotted list with N entries, the first
           # N - 1 entries are pulled off the right-hand side and assigned to
           # those first variables...
-          vm.asm "        mov     8(%r12), %rdx"
-          vm.asm "        mov     16(%r12), %r12"
+          codegen_single_destructuring_assignment(vm, name, "r12")
         else
-          # ...and the last variable is assigned the rest of the list.
-          vm.asm "        mov     %r12, %rdx"
-        end
-
-        vm.argframe
-        vm.with_aligned_stack do
-          vm.call "add_to_frame"
+          # ...and the last entry is assigned the rest of the list.
+          codegen_single_non_destructuring_assignment(vm, name, "r12")
         end
       end
     end
 
-    def codegen_assignment_to_list(vm, binding)
+    def codegen_assignment_to_list(vm, lvalue)
       # %r12 is callee saved, so the call to "add_to_frame" won't overwrite
       # the value we want to assign to the bindings.
       vm.asm("        mov     %rax, %r12")
 
-      binding.name.children.each do |name|
-        varname = vm.addvarname(name)
-
-        vm.movlabelreg varname, "%rsi"
-
+      lvalue.children.each do |name|
         # When the left-hand side is a nil-terminated list with N entries, the
         # first N entries are pulled off the right-hand side and assigned to
         # those variables.
-        vm.asm "        mov     8(%r12), %rdx"
-        vm.asm "        mov     16(%r12), %r12"
-
-        # Technically, the very last entry in the list is a `nil`, meaning we
-        # should check the last entry in the right-hand side to make sure it is
-        # also a `nil`. However, for now, ignore that condition.
-
-        vm.argframe
-        vm.with_aligned_stack do
-          vm.call "add_to_frame"
-        end
+        codegen_single_destructuring_assignment(vm, name, "r12")
       end
-    end
+
+      # Technically, the very last entry in the list is a `nil`, meaning we
+      # should check the last entry in the right-hand side to make sure it is
+      # also a `nil`. However, for now, ignore that condition.
+  end
   end
 end
 
