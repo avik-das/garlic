@@ -98,6 +98,36 @@ for testfile in test/failure-compile/*.scm; do
     if [ $? -eq 0 ]; then
         echo
         fail "Compiling \"$testfile\" unexpectedly succeeded"
+        echo
+    fi
+
+    clear_line
+done
+
+for testfile in test/failure-runtime/*.scm; do
+    log_info_clearable "Running \"$testfile\"..."
+
+    ./garlic "$testfile" > test/tmp.result 2>&1
+
+    if [ $? -ne 0 ]; then
+        echo
+        echo
+        cat test/tmp.result
+
+        fail "Compiling \"$testfile\" failed"
+        echo
+        continue
+    fi
+
+    ./main > test/tmp.result 2>&1
+
+    if [ $? -eq 0 ]; then
+        echo
+        echo
+        cat test/tmp.result
+
+        fail "Running \"$testfile\" unexpectedly succeeded"
+        echo
     fi
 
     clear_line

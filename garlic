@@ -2046,6 +2046,11 @@ module AST
     end
 
     def codegen_single_destructuring_assignment(vm, lvalue, source)
+      # Check that the rvalue is a cons cell. This is instead of segfaulting
+      # when trying to unpack the cell.
+      vm.asm "        mov     %#{source}, %rdi"
+      vm.call "check_destructuring_assignment"
+
       case lvalue
       when Var
         varname = vm.addvarname(lvalue)
@@ -2104,10 +2109,12 @@ module AST
         codegen_single_destructuring_assignment(vm, name, "r12")
       end
 
-      # Technically, the very last entry in the list is a `nil`, meaning we
-      # should check the last entry in the right-hand side to make sure it is
-      # also a `nil`. However, for now, ignore that condition.
-  end
+      # The very last entry in the list should be a `nil`. If any and all
+      # remaining entries are supposed to be put into a "rest" variable, a
+      # dotted list assignment should be used.
+      vm.asm "        mov     %r12, %rdi"
+      vm.call "check_destructuring_terminated_in_nil"
+    end
   end
 end
 

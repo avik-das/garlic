@@ -371,7 +371,7 @@ Let bindings can also _destructure_ values. If both a binding and its value are 
   (display rest) (newline)) ; (4)
 ```
 
-Note there is very little error checking currently. In particular, mismatches in structure between the left and right-hand sides may or may not be handled correctly.
+Destructuring is only available for let bindings currently.
 
 ### Modules
 

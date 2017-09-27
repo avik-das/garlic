@@ -146,6 +146,25 @@ garlic_value_t get_atom(char *name) {
     return value_ptr;
 }
 
+/** RUNTIME CHECKS ************************************************************/
+
+void error_and_exit(const char *message) {
+    printf("\033[1;31merr: %s\033[0m\n", message);
+    exit(1);
+}
+
+void check_destructuring_assignment(garlic_value_t rvalue) {
+    if (garlic_get_type(rvalue) != GARLIC_TYPE_CONS) {
+        error_and_exit("unable to unpack list");
+    }
+}
+
+void check_destructuring_terminated_in_nil(garlic_value_t rvalue) {
+    if (rvalue != NIL_VALUE) {
+        error_and_exit("destructured list did not end in NIL");
+    }
+}
+
 /** USERLAND FUNCTIONS ********************************************************/
 
 double garlicval_to_double(garlic_value_t wrapped) {
