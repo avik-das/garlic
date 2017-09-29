@@ -38,11 +38,10 @@ int handle_request(
 
     const char *response_body_str = garlic_unwrap_string(response_body);
 
-    struct MHD_Response *response = MHD_create_response_from_data(
+    struct MHD_Response *response = MHD_create_response_from_buffer(
             strlen(response_body_str),
             (void *)response_body_str,
-            MHD_NO,
-            MHD_NO);
+            MHD_RESPMEM_PERSISTENT);
 
     int ret = MHD_queue_response(
             connection,
