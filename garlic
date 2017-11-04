@@ -629,6 +629,8 @@ module AST
               Definition.new(*filtered_children)
             when :lambda
               Lambda.new(*filtered_children)
+            when :begin
+              Begin.new(*filtered_children)
             when :if
               If.new(*filtered_children)
             when :cond
@@ -902,6 +904,42 @@ module AST
     end
 
     attr :params, :rest_param, :is_vararg, :body_statements, :children
+  end
+
+  class Begin < SpecializedNode
+    def initialize(*children)
+      @expressions = children.drop(1)
+    end
+
+    def static_transformed
+      raise ParseException.new('begin block must have at least one child') \
+        if @expressions.empty?
+
+      @expressions = @expressions.map(&:static_transformed)
+
+      self
+    end
+
+    def compute_names_in_scope(parent_names)
+      @names_in_scope = parent_names
+      @expressions.each do |expr|
+        expr.compute_names_in_scope(@names_in_scope)
+      end
+    end
+
+    def to_s
+      expressions_str = @expressions_str
+        .map {|expr| "  #{expr}"}
+        .join("\n")
+
+      "(\033[#{self.internal_color}mbegin\n#{expressions_str}\033[0m)"
+    end
+
+    def internal_color
+      "1;34"
+    end
+
+    attr :expressions
   end
 
   class FunctionCall < SpecializedNode
@@ -1829,6 +1867,14 @@ module AST
       vm.movlabelreg name, "%rsi"
       vm.with_aligned_stack do
         vm.call "make_fn"
+      end
+    end
+  end
+
+  class Begin < SpecializedNode
+    def codegen(vm, program, all_modules)
+      @expressions.each do |expr|
+        expr.codegen(vm, program, all_modules)
       end
     end
   end

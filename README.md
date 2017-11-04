@@ -373,6 +373,25 @@ Let bindings can also _destructure_ values. If both a binding and its value are 
 
 Destructuring is only available for let bindings currently.
 
+### Begin blocks
+
+Certain constructs, such as function bodies, support multiple statements. Other constructs only accept one statement, such as each branch of an `if` expression. One way to add side-effects to these constructs is to put multiple statements in a function, then call it as a single expression.
+
+As a shortcut, Garlic provides the `begin` construct, which evaluates one or more statements and returns the value of the last one:
+
+```scheme
+; evaluates to 1, but first prints "true"
+(if #t
+  (begin
+    (display "true")
+    (newline)
+    1)
+  (begin
+    (display "false")
+    (newline)
+    2))
+```
+
 ### Modules
 
 Garlic supports a full module system. A module consists of a single garlic file that defines a set of identifiers it wants to mark as visible to other garlic files. In the following module, `f` and `g` are exported by the `module-export` syntax, but `h` is not. By putting it a file called `my-module.scm`, this file defines the `my-module` module.
