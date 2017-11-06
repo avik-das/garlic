@@ -13,10 +13,12 @@
 
 (define (id? token)
   (and (list? token)
+       (symbol? (car token))
        (= (car token) 'id)) )
 
 (define (int? token)
   (and (list? token)
+       (symbol? (car token))
        (= (car token) 'int)) )
 
 (define (open-paren? token)
