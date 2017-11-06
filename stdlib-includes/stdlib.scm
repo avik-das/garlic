@@ -42,12 +42,16 @@
 
 (define (identity x) x)
 
-; varargs are necessary for implementing a proper compose function. Either this
-; function has to accept varargs, or there needs to be a way to easily
-; construct a list of functions (quoting doesn't work since everything inside
-; the quoted list becomes a symbol, and cons isn't that convenient).
-(define (compose f g)
-  (lambda (x) (f (g x))) )
+(define (compose . fs)
+  (define (compose2 f g)
+    (lambda (x) (f (g x))) )
+
+  (define (helper fs)
+    (if (null? fs)
+      identity
+      (compose2 (car fs) (helper (cdr fs))) ))
+
+  (helper fs) )
 
 (define (list . x) x)
 

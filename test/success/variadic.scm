@@ -25,3 +25,12 @@
 ; arguments is a little different: you have to specify the entire argument list
 ; as a single variable, not a list.
 (display ((lambda ls (sum ls)) 1 2 3)) (newline)
+
+(newline)
+
+; `compose` is an example of a variadic function
+(display ((compose
+            (lambda (x) (* x 2))
+            (lambda (x) (- x 3))
+            (lambda (x) (+ x 4))
+            (lambda (x) (* x 5))) 1)) (newline)
