@@ -59,9 +59,21 @@ garlic_value_t symbol_to_str(garlic_value_t sym) {
     return garlic_wrap_string(garlic_atom_name(sym));
 }
 
+garlic_value_t string_equalp(garlic_value_t str1, garlic_value_t str2) {
+    if (garlic_get_type(str1) != GARLIC_TYPE_STRING ||
+            garlic_get_type(str2) != GARLIC_TYPE_STRING) {
+        error_and_exit("ERROR - string=? can only compare strings");
+    }
+
+    const char *cstr1 = garlic_unwrap_string(str1);
+    const char *cstr2 = garlic_unwrap_string(str2);
+    return strcmp(cstr1, cstr2) == 0 ? TRUE_VALUE : FALSE_VALUE;
+}
+
 garlic_native_export_t string_exports[] = {
     {"concat", concat, 0, 1},
     {"concat-list", concat_list, 1},
     {"symbol->str", symbol_to_str, 1},
+    {"string=?", string_equalp, 2},
     0
 };

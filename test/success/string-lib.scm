@@ -17,3 +17,8 @@
 (newline)
 
 (display (str:symbol->str 'this-was-a-symbol)) (newline)
+
+(newline)
+
+(display (str:string=? "abc" "abc")) (newline)
+(display (str:string=? "ABC" "abc")) (newline)

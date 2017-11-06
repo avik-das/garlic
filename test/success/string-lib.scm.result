@@ -11,3 +11,6 @@ abcdef
 abcdef
 
 this-was-a-symbol
+
+#t
+#f
