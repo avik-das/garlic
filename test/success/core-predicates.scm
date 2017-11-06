@@ -13,9 +13,9 @@
 
 (newline)
 
-(display (cons? '(1))) (newline)
-(display (cons? '(1 2))) (newline)
-(display (cons? (list 1 2))) (newline)
-(display (cons? '())) (newline)
-(display (cons? 'symbol)) (newline)
-(display (cons? 1)) (newline)
+(display (list? '(1))) (newline)
+(display (list? '(1 2))) (newline)
+(display (list? (list 1 2))) (newline)
+(display (list? '())) (newline)
+(display (list? 'symbol)) (newline)
+(display (list? 1)) (newline)

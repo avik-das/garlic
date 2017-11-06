@@ -12,11 +12,11 @@
 ;; PREDICATES ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define (id? token)
-  (and (cons? token)
+  (and (list? token)
        (= (car token) 'id)) )
 
 (define (int? token)
-  (and (cons? token)
+  (and (list? token)
        (= (car token) 'int)) )
 
 (define (open-paren? token)
