@@ -6,6 +6,4 @@
 (define lexed (lexer:lex input))
 
 (define parsed (parser:parse lexed))
-(foreach
-  (lambda (expr) (display "> " expr) (newline))
-  parsed) (newline)
+(display parsed) (newline)
