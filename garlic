@@ -1194,28 +1194,30 @@ module AST
           "Let bindings must be a list, got: (#{@children[1]})")
       end
 
-      @bindings = @children[1].children.map { |binding|
-        unless binding.is_a?(NestedNode)
-          raise ParseException.new(
-            "Let binding must be a list, got: (#{binding})")
-        end
+      @bindings = @children[1].children
+        .reject { |binding| binding.is_a?(Comment) }
+        .map { |binding|
+          unless binding.is_a?(NestedNode)
+            raise ParseException.new(
+              "Let binding must be a list, got: (#{binding})")
+          end
 
-        unless binding.children.size == 2
-          raise ParseException.new(
-            "Let binding must have two children, got " +
+          unless binding.children.size == 2
+            raise ParseException.new(
+              "Let binding must have two children, got " +
               "#{binding.children.size}: (#{binding.children.join(" ")})")
-        end
+          end
 
-        unless binding.children[0].can_be_used_as_binding?
-          raise ParseException.new(
-            "Let binding must a valid left-hand value, got: " +
+          unless binding.children[0].can_be_used_as_binding?
+            raise ParseException.new(
+              "Let binding must a valid left-hand value, got: " +
               "#{binding.children[0]}")
-        end
+          end
 
-        name = binding.children[0]
-        value = binding.children[1].static_transformed
-        LetBinding.new(name, value)
-      }
+          name = binding.children[0]
+          value = binding.children[1].static_transformed
+          LetBinding.new(name, value)
+        }
 
       @expressions = @children.drop(2).map(&:static_transformed)
       @expressions = with_hoisted_definitions(@expressions)
