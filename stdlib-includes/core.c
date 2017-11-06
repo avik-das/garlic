@@ -1,6 +1,43 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <garlic.h>
+
+// XXX: does not support calling variadic because it is not known at runtime if
+// a function is variadic. Sometimes, it seems to work, we should not depend on
+// it always working.
+garlic_value_t apply(garlic_value_t fn, garlic_value_t arglist) {
+    int count = 0;
+    garlic_value_t rest = arglist;
+    while (rest != NIL_VALUE) {
+        if (garlic_get_type(rest) != GARLIC_TYPE_CONS) {
+            error_and_exit("ERROR - invalid argument list\n");
+        }
+
+        count++;
+        rest = garlic_cdr(rest);
+    }
+
+    garlic_value_t *argarray =
+        (garlic_value_t *) malloc(sizeof(garlic_value_t) * count);
+    if (!argarray) {
+        error_and_exit("unable to allocate memory for argument list");
+    }
+
+    rest = arglist;
+    for (int i = 0; i < count; i++) {
+        argarray[i] = garlic_car(rest);
+        rest = garlic_cdr(rest);
+    }
+
+    garlic_value_t result = garlic_call_function(
+            fn,
+            argarray,
+            count);
+
+    free(argarray);
+    return result;
+}
 
 garlic_value_t nullp(garlic_value_t value) {
     return value == NIL_VALUE ?
@@ -233,6 +270,8 @@ garlic_value_t display(garlic_value_t vals) {
 // Many of the functions are lifted straight from the runtime, and so, they do
 // not need to be re-implemented here.
 garlic_native_export_t core_exports[] = {
+    {"apply", apply, 2},
+
     {"null?", nullp, 1},
     {"symbol?", symbolp, 1},
     {"list?", listp, 1},
