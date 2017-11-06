@@ -8,6 +8,9 @@ typedef struct garlic_native_export {
     unsigned int variadic;
 } garlic_native_export_t;
 
+/* Print out the given message and exit. */
+void error_and_exit(const char *message);
+
 typedef void * garlic_value_t;
 
 enum garlic_value_type {

@@ -170,8 +170,7 @@ garlic_value_t equal_sign(
         case GARLIC_TYPE_ATOM:
             return equal_sign_identity(a, vals);
         default:
-            printf("ERROR: = can only compare numbers and symbols");
-            return NIL_VALUE;
+            error_and_exit("ERROR: = can only compare numbers and symbols");
     }
 }
 
