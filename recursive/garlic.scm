@@ -32,9 +32,10 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-; TODO: Start with only test input. Assume it has been lexed.
-(define input "TODO")
+(define input
+  "(display (+ (- 1 2) (* 3 (+ 4 5)) 6)) (newline)
+   (display (+ 7 8)) (newline)
+   (display 9) (newline)")
 (define lexed (lexer:lex input))
-
 (define parsed (parser:parse lexed))
 (recursive-eval parsed)
