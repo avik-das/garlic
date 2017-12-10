@@ -14,3 +14,18 @@ this-was-a-symbol
 
 #t
 #f
+
+a
+b
+c
+d
+()
+
+abcd
+bcd
+cd
+d
+
+
+#f
+#t
