@@ -37,9 +37,10 @@ int handle_request(
             0);
 
     const char *response_body_str = garlic_unwrap_string(response_body);
+    size_t response_body_size = garlic_string_length(response_body);
 
     struct MHD_Response *response = MHD_create_response_from_buffer(
-            strlen(response_body_str),
+            response_body_size,
             (void *)response_body_str,
             MHD_RESPMEM_PERSISTENT);
 

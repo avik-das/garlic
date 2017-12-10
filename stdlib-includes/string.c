@@ -20,7 +20,7 @@ garlic_value_t concat(garlic_value_t args) {
             return NIL_VALUE;
         }
 
-        total_length += strlen(garlic_unwrap_string(item));
+        total_length += garlic_string_length(item);
     }
 
     total_length++; // for the NULL-terminator
@@ -34,7 +34,7 @@ garlic_value_t concat(garlic_value_t args) {
 
         const char *str = garlic_unwrap_string(item);
         strcpy(result + start, str);
-        start += strlen(str);
+        start += garlic_string_length(item);
     }
 
     return garlic_wrap_string(result);

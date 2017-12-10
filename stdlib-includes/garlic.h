@@ -68,6 +68,11 @@ garlic_value_t garlic_empty_string;
  * within. */
 const char * garlic_unwrap_string(garlic_value_t wrapped);
 
+/* given a value of type garlic_value_t, representing a garlic string, get its
+ * length. This function is provided because the length is cached in the value,
+ * making it efficient to look up. */
+size_t garlic_string_length(garlic_value_t string);
+
 /* Returns a C-string representation of an atom's name. Normally, the name
  * should not be used, since the point of an atom is that all occurences of a
  * specific atom are stored in the same location in memory. However, getting

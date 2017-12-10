@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <math.h>
 #include <garlic.h>
 
@@ -86,6 +87,10 @@ struct garlic_atom {
 
 struct garlic_string {
     struct garlic_value super;
+    size_t length;
+    // NOTE: even though the length of a string is stored, the contents are
+    // still stored as a null-terminated string. This allows easy unwrapping to
+    // a C-style string, for use in C extensions.
     const char* contents;
 };
 
@@ -187,6 +192,7 @@ garlic_value_t double_to_garlicval(double flt) {
 
 garlic_value_t garlic_empty_string = &(struct garlic_string) {
     {GARLIC_TYPE_STRING},
+    0,
     ""
 };
 
@@ -205,6 +211,7 @@ garlic_value_t garlic_wrap_string(const char *contents) {
         malloc(sizeof(struct garlic_string));
 
     string->super.type = GARLIC_TYPE_STRING;
+    string->length = strlen(contents);
     string->contents = contents;
 
     return string;
@@ -224,6 +231,14 @@ void * garlic_unwrap_native(garlic_value_t wrapped) {
     }
 
     return ((struct garlic_wrapped_native *) wrapped)->native_val;
+}
+
+size_t garlic_string_length(garlic_value_t string) {
+    if (garlic_get_type(string) != GARLIC_TYPE_STRING) {
+        return 0;
+    }
+
+    return ((struct garlic_string *) string)->length;
 }
 
 const char * garlic_atom_name(garlic_value_t atom) {
