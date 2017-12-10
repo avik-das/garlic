@@ -63,6 +63,18 @@ struct frame_t * new_frame_with_parent(struct frame_t *parent) {
     return frame;
 }
 
+/** INITIALIZATION ************************************************************/
+
+void create_argv(struct frame_t *frame, int argc, char **argv) {
+    garlic_value_t arglist = NIL_VALUE;
+    for (int i = argc - 1; i >= 0; i--) {
+        garlic_value_t arg = garlic_wrap_string(argv[i]);
+        arglist = garlic_make_cons(arg, arglist);
+    }
+
+    add_to_frame(frame, "*argv*", arglist);
+}
+
 /** STANDARD TYPES ************************************************************/
 
 struct garlic_value {

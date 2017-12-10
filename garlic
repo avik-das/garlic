@@ -150,6 +150,16 @@ module AST
   class GarlicModule
     include CommonTransformations
 
+    # These names are available in all scopes. For the most part, these special
+    # names have been avoided in favor of defining names in the core and stdlib
+    # modules. However, some names can't be defined this way.
+    GLOBAL_NAMES = [
+      # The command line arguments are only available in the "main" function of
+      # a C or assembly program, so it's not possible to define it in a
+      # library, even one that's available in every program.
+      :"*argv*"
+    ]
+
     def initialize(*statements)
       @statements = statements
     end
@@ -354,7 +364,7 @@ module AST
 
     def compute_names_in_scope
       def_names = def_names_from_statements(@statements)
-      @names_in_scope = def_names
+      @names_in_scope = GLOBAL_NAMES | def_names
 
       @statements.each do |statement|
         statement.compute_names_in_scope(@names_in_scope)
@@ -2262,12 +2272,31 @@ module VM
       asm "        ret"
       asm "#{main_name}_do_init:"
       asm "        movreglabel($1, #{@symbol_prefix}_is_initialized)"
+      if @is_main
+        # In the main function, the arguments are "argc" and "argv". These need
+        # to be saved so they can be added to the root frame after the root
+        # frame has been created.
+        push "%rdi"
+        push "%rsi"
+      end
       push
       asm "        call    #{@symbol_prefix}_create_atoms"
       call "new_root_frame"
       asm "        movreglabel(%rax, #{@symbol_prefix}_root_frame)"
       pop
+      if @is_main
+        # The first and second arguments were saved, but they will become the
+        # second and third arguments respectively to the "create_argv"
+        # function. The first argument will be the root frame itself.
+        pop "%rdx"
+        pop "%rsi"
+      end
       push("%rax")
+
+      if @is_main
+        asm "        mov     %rax, %rdi"
+        call "create_argv"
+      end
 
       asm ""
       @module_requires.each do |mod|
