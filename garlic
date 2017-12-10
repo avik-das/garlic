@@ -2377,7 +2377,9 @@ module VM
     end
 
     def addstring(contents)
-      contents_str = contents.to_s
+      # Make sure to write out explicit newline separators, instead of
+      # including them verbatim in the assembly code.
+      contents_str = contents.to_s.gsub(/(\r\n|\n|\r)+/, '\n')
 
       if @stringnames.has_key?(contents_str)
         @stringnames[contents_str]

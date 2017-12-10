@@ -87,6 +87,10 @@ three
 a string
 some numbers and symbols: 1 2 3 # @ <- cool!
 a string with a newline afterwards
+a string with
+  a newline in the middle
+another string with
+  a newline in the middle
 	a string with an embedded tab
 a string with "escaped" quotes
 no need to 'escape' single quotes

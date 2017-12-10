@@ -199,6 +199,9 @@
 (display "a string") (newline)
 (display "some numbers and symbols: 1 2 3 # @ <- cool!") (newline)
 (display "a string with a newline afterwards\n")
+(display "a string with\n  a newline in the middle") (newline)
+(display "another string with
+  a newline in the middle") (newline)
 (display "\ta string with an embedded tab") (newline)
 (display "a string with \"escaped\" quotes") (newline)
 (display "no need to 'escape' single quotes") (newline)

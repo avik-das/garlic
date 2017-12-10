@@ -103,12 +103,14 @@ The next type of atom is the boolean.
 #f ; false
 ```
 
-Strings are also considered atoms. Strings are denoted by double-quotes, and double quotes may be escaped inside the string by a backslash. The standard escape sequences such as `\n` and `\t` are supported.
+Strings are also considered atoms. Strings are denoted by double-quotes, and double quotes may be escaped inside the string by a backslash. The standard escape sequences such as `\n` and `\t` are supported. Strings may span multiple lines.
 
 ```scheme
 "a string"
 "some numbers and symbols: 1 2 3 # @"
 "a string with\na newline"
+"another string with
+a newline"
 "\ta string with an embedded tab"
 "a string with \"escaped\" quotes"
 "no need to 'escape' single quotes"
