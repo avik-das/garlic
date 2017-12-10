@@ -40,6 +40,11 @@
                     (foreach f (cdr ls))
                     '()) )) ) ; return nil no matter what
 
+(define (any? pred ls)
+  (cond ((null? ls) #f)
+        ((pred (car ls)) #t)
+        (else (any? pred (cdr ls))) ))
+
 (define (identity x) x)
 
 (define (compose . fs)
@@ -65,6 +70,7 @@
   reduce
   sum
   foreach
+  any?
   identity
   compose
   list)
