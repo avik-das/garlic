@@ -24,6 +24,11 @@
 (define (reject f ls)
         (filter (lambda (x) (not (f x))) ls) )
 
+(define (find predicate ls)
+  (cond ((null? ls) #f)
+        ((predicate (car ls)) (car ls))
+        (else (find predicate (cdr ls))) ))
+
 (define (reduce f zero ls)
         (if (null? ls)
             zero
@@ -67,6 +72,7 @@
   map
   filter
   reject
+  find
   reduce
   sum
   foreach
