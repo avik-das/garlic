@@ -1,3 +1,5 @@
+(require string => str)
+
 (require "tokens" => tok)
 (require "ast")
 
@@ -38,7 +40,29 @@
 (define (subtree-to-ast tree)
   (cond ((tok:id? tree) (ast:var (tok:id-get-name tree)))
         ((tok:int? tree) (ast:int (tok:int-get-value tree)))
-        ((list? tree) (subtree-to-function-call tree)) ))
+        ((list? tree) (specialize-subtree tree)) ))
+
+(define (specialize-subtree tree)
+  (define (is-type? type name)
+    (and (tok:id? type)
+         (str:string=? (tok:id-get-name type) name)) )
+
+  ; Assumes `tree` is a list
+  (let ((type (car tree)))
+    (cond ((is-type? type "define") (subtree-to-define tree))
+          (else (subtree-to-function-call tree)) ) ))
+
+(define (subtree-to-define tree)
+  ; Only supports value definitions, i.e. not the function definition
+  ; shorthand. For example, the following is supported:
+  ;
+  ;   (define name ...)
+  ;
+  ; But not yet:
+  ;
+  ;   (define (fn arg) ...)
+  (let (((keyword name body) tree))
+    (ast:definition (tok:id-get-name name) (subtree-to-ast body)) ))
 
 (define (subtree-to-function-call tree)
   (let (((fn . args) (map subtree-to-ast tree)))
