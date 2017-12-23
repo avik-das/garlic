@@ -22,20 +22,14 @@
        (symbol? (car ast))
        (= (car ast) symbol)))
 
-(define (module? ast)
-  (starts-with-symbol? ast 'garlic-module))
+(define (type-checker type)
+  (lambda (ast) (starts-with-symbol? ast type)) )
 
-(define (var? ast)
-  (starts-with-symbol? ast 'var))
-
-(define (int? ast)
-  (starts-with-symbol? ast 'int))
-
-(define (definition? ast)
-  (starts-with-symbol? ast 'definition))
-
-(define (function-call? ast)
-  (starts-with-symbol? ast 'function-call))
+(define module? (type-checker 'garlic-module))
+(define var? (type-checker 'var))
+(define int? (type-checker 'int))
+(define definition? (type-checker 'definition))
+(define function-call? (type-checker 'function-call))
 
 ;; GETTERS ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; assumes AST nodes are already validated to be of the correct type
@@ -45,10 +39,10 @@
 (define int-get-value cdr)
 
 (define definition-get-name (compose car cdr))
-(define definition-get-body (compose car (compose cdr cdr)))
+(define definition-get-body (compose car cdr cdr))
 
 (define function-call-get-function (compose car cdr))
-(define function-call-get-args (compose car (compose cdr cdr)))
+(define function-call-get-args (compose car cdr cdr))
 
 ;; EXPORTS ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
