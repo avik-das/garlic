@@ -66,10 +66,34 @@
   (lambda (tree)
     (recursive-eval tree frame)) )
 
+(define (eval-definitions definitions frame)
+  (if (null? definitions)
+    frame
+    (let* (((first . remaining) definitions)
+           (symbol (ast:definition-get-name first))
+           (value (recursive-eval (ast:definition-get-body first) frame))
+           (new-frame (add-to-frame frame symbol value)))
+      (eval-definitions remaining new-frame)) ))
+
+(define (eval-statement-list-without-defines statements frame)
+  (if (null? statements)
+    '()
+    (let* (((first . remaining) statements)
+           (first-result (recursive-eval first frame)))
+      (if (null? remaining)
+        first-result
+        (eval-statement-list-without-defines remaining frame)) ) ))
+
+(define (eval-statement-list statements frame)
+  (let* ((definitions (filter ast:definition? statements))
+         (non-definitions (reject ast:definition? statements))
+         (new-frame (eval-definitions definitions frame)))
+    (eval-statement-list-without-defines non-definitions new-frame) ))
+
 (define (eval-module module)
-  (foreach
-    (recursive-eval-with-frame root-frame)
-    (ast:module-get-statements module) ))
+  (eval-statement-list
+    (ast:module-get-statements module)
+    root-frame))
 
 (module-export
   eval-module)
