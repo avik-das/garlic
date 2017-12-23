@@ -12,6 +12,10 @@
 (define (definition name body)
   (list 'definition name body))
 
+; Represents a lambda
+(define (function args body)
+  (list 'function args body))
+
 (define (function-call fn args)
   (list 'function-call fn args))
 
@@ -29,6 +33,7 @@
 (define var? (type-checker 'var))
 (define int? (type-checker 'int))
 (define definition? (type-checker 'definition))
+(define function? (type-checker 'function))
 (define function-call? (type-checker 'function-call))
 
 ;; GETTERS ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -41,6 +46,9 @@
 (define definition-get-name (compose car cdr))
 (define definition-get-body (compose car cdr cdr))
 
+(define function-get-args (compose car cdr))
+(define function-get-body (compose car cdr cdr))
+
 (define function-call-get-function (compose car cdr))
 (define function-call-get-args (compose car cdr cdr))
 
@@ -52,6 +60,7 @@
   var
   int
   definition
+  function
   function-call
 
   ; Predicates
@@ -59,6 +68,7 @@
   var?
   int?
   definition?
+  function?
   function-call?
 
   ; Getters
@@ -67,5 +77,7 @@
   int-get-value
   definition-get-name
   definition-get-body
+  function-get-args
+  function-get-body
   function-call-get-function
   function-call-get-args)
