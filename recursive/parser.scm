@@ -50,6 +50,7 @@
   ; Assumes `tree` is a list
   (let ((type (car tree)))
     (cond ((is-type? type "define") (subtree-to-define tree))
+          ((is-type? type "lambda") (subtree-to-lambda tree))
           (else (subtree-to-function-call tree)) ) ))
 
 (define (subtree-to-define tree)
@@ -63,6 +64,14 @@
   ;   (define (fn arg) ...)
   (let (((keyword name body) tree))
     (ast:definition (tok:id-get-name name) (subtree-to-ast body)) ))
+
+(define (subtree-to-lambda tree)
+  ; Does not support variadic functions yet. Thus, it is assumed the argument
+  ; list of the lambda is a flat list of identifiers.
+  (let (((keyword args . statements) tree))
+    (ast:function
+      (map tok:id-get-name args)
+      (map subtree-to-ast statements)) ))
 
 (define (subtree-to-function-call tree)
   (let (((fn . args) (map subtree-to-ast tree)))
