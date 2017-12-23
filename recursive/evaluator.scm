@@ -9,7 +9,7 @@
 
 ;; FRAME ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(define (make-frame parent . symbols)
+(define (make-frame parent symbols)
   (cons parent symbols))
 
 (define frame-parent car)
@@ -17,11 +17,11 @@
 
 (define root-frame
   (make-frame '()
-              (cons "+" +)
-              (cons "-" -)
-              (cons "*" *)
-              (cons "display" display)
-              (cons "newline" newline)) )
+              (list (cons "+" +)
+                    (cons "-" -)
+                    (cons "*" *)
+                    (cons "display" display)
+                    (cons "newline" newline))) )
 
 (define (find-in-frame frame symbol)
   (define (find-in-list ls)
@@ -37,6 +37,13 @@
       (if entry
         (cdr entry)
         (find-in-frame parent symbol)) )) )
+
+(define (add-to-frame frame symbol value)
+  (let* ((parent (frame-parent frame))
+         (symbols (frame-symbols frame))
+         (entry (cons symbol value))
+         (new-symbols (cons entry symbols)))
+    (make-frame parent new-symbols) ))
 
 ;; EVALUATION ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
