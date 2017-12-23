@@ -9,6 +9,9 @@
 (define (int val)
   (cons 'int val))
 
+(define (definition name body)
+  (list 'definition name body))
+
 (define (function-call fn args)
   (list 'function-call fn args))
 
@@ -28,6 +31,9 @@
 (define (int? ast)
   (starts-with-symbol? ast 'int))
 
+(define (definition? ast)
+  (starts-with-symbol? ast 'definition))
+
 (define (function-call? ast)
   (starts-with-symbol? ast 'function-call))
 
@@ -37,6 +43,9 @@
 (define module-get-statements cdr)
 (define var-get-name cdr)
 (define int-get-value cdr)
+
+(define definition-get-name (compose car cdr))
+(define definition-get-body (compose car (compose cdr cdr)))
 
 (define function-call-get-function (compose car cdr))
 (define function-call-get-args (compose car (compose cdr cdr)))
@@ -48,17 +57,21 @@
   module
   var
   int
+  definition
   function-call
 
   ; Predicates
   module?
   var?
   int?
+  definition?
   function-call?
 
   ; Getters
   module-get-statements
   var-get-name
   int-get-value
+  definition-get-name
+  definition-get-body
   function-call-get-function
   function-call-get-args)
