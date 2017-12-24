@@ -20,6 +20,7 @@
               (list (cons "+" +)
                     (cons "-" -)
                     (cons "*" *)
+                    (cons "cons" cons)
                     (cons "display" display)
                     (cons "newline" newline))) )
 
