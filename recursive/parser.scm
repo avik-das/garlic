@@ -54,16 +54,34 @@
           (else (subtree-to-function-call tree)) ) ))
 
 (define (subtree-to-define tree)
-  ; Only supports value definitions, i.e. not the function definition
-  ; shorthand. For example, the following is supported:
-  ;
-  ;   (define name ...)
-  ;
-  ; But not yet:
-  ;
-  ;   (define (fn arg) ...)
-  (let (((keyword name body) tree))
-    (ast:definition (tok:id-get-name name) (subtree-to-ast body)) ))
+  (let (((keyword name . body) tree))
+    (if (tok:id? name)
+      ; The first case is a simple value definition:
+      ;
+      ;   (define name body)
+      ;
+      ; In this case, only one statement is supported in the "body", so the
+      ; body is assumed to be a single element list.
+      (ast:definition (tok:id-get-name name) (subtree-to-ast (car body)))
+
+      ; The second case is if the name is a list:
+      ;
+      ;   (define (function-name arg0 arg1 ...) ...)
+      ;           ^---------- name -----------^
+      ;
+      ; This represents a function definition, and it should be transformed to
+      ; a value definition in which the value is a lambda:
+      ;
+      ;   (define function-name (lambda (arg0 arg 1) ...))
+      (ast:definition
+        (tok:id-get-name (car name))
+        (subtree-to-lambda
+          ; Synthesize a list of tokens representing a lambda. Notice that
+          ; the body, which is a list of trees, is the tail of the lambda list,
+          ; as opposed to the last element.
+          (cons (tok:id "lambda") (cons (cdr name) body)) )) ) ))
+
+
 
 (define (subtree-to-lambda tree)
   ; Does not support variadic functions yet. Thus, it is assumed the argument
