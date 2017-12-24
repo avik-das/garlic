@@ -45,26 +45,61 @@
          (new-symbols (cons entry symbols)))
     (make-frame parent new-symbols) ))
 
+;; LAMBDA DATA STRUCTURE ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(define (create-lambda parent-frame args body)
+  (list 'lambda parent-frame args body))
+
+(define (is-lambda? fn)
+  (and (list? fn)
+       (symbol? (car fn))
+       (= (car fn) 'lambda)))
+
+(define lambda-get-parent-frame (compose car cdr))
+(define lambda-get-args (compose car cdr cdr))
+(define lambda-get-body (compose car cdr cdr cdr))
+
 ;; EVALUATION ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define (eval-call-function call frame)
-  (let ((fn (ast:function-call-get-function call))
-        (args (ast:function-call-get-args call)))
-    ; In the future, instead of calling `apply`, a new frame will be
-    ; constructed, and the body of the function will be evaluated with respect
-    ; to that frame.
-    (apply
-      (recursive-eval fn frame)
-      (map (recursive-eval-with-frame frame) args)) ))
+  (let* ((fn (recursive-eval (ast:function-call-get-function call) frame))
+         (args
+           (map (recursive-eval-with-frame frame)
+                (ast:function-call-get-args call))) )
+    (if (is-lambda? fn)
+      (eval-call-lambda fn args)
+      (apply fn args) )))
+
+(define (eval-call-lambda fn args)
+  (define (add-args-to-frame names args frame)
+    (if (null? names)
+      frame
+      (add-args-to-frame
+        (cdr names)
+        (cdr args)
+        (add-to-frame frame (car names) (car args))) ))
+
+  (let* ((parent-frame (lambda-get-parent-frame fn))
+         (empty-frame (make-frame parent-frame '()))
+         (frame-with-args
+           (add-args-to-frame (lambda-get-args fn) args empty-frame))
+         (body (lambda-get-body fn)))
+    (eval-statement-list body frame-with-args) ))
 
 (define (recursive-eval tree frame)
   (cond ((ast:var? tree) (find-in-frame frame (ast:var-get-name tree)))
         ((ast:int? tree) (ast:int-get-value tree))
+        ((ast:function? tree) (ast-function-to-lambda tree frame))
         ((ast:function-call? tree) (eval-call-function tree frame)) ))
 
 (define (recursive-eval-with-frame frame)
   (lambda (tree)
     (recursive-eval tree frame)) )
+
+(define (ast-function-to-lambda fn frame)
+  (let ((args (ast:function-get-args fn))
+        (body (ast:function-get-body fn)))
+    (create-lambda frame args body) ))
 
 (define (eval-definitions definitions frame)
   (if (null? definitions)
