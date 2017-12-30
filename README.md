@@ -42,6 +42,13 @@ High-level features
 * Module system
 * Foreign function interface allowing implementation of garlic modules in C
 
+Self-hosting
+------------
+
+I've started work on a re-implementation of the language, in _itself_, in order to work towards a self-hosted compiler. The ultimate goal of such as an implementation is to fully pass the test suite for the language.
+
+[Follow along on the progress of the self-hosted implementation in the `recursive` directory.](recursive)
+
 The language
 ------------
 
