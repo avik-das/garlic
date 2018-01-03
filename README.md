@@ -1,3 +1,5 @@
+<p align="center"><img src="logo.png" width="96" height="128" /></p>
+
 The Garlic Programming Language
 ===============================
 
