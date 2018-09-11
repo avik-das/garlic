@@ -1419,32 +1419,23 @@ module AST
       asm "#endif"
 
       asm ""
+      asm "# The remaining macros make it easier to specify Position"
+      asm "# Independent Code (PIC)."
+      asm ""
 
-      asm "#if defined(__APPLE__)"
       asm "# define movlabelreg(src, dst) movq    src##\@GOTPCREL(%rip), dst"
-      asm "#else"
-      asm "# define movlabelreg(src, dst) mov     $##src##, dst"
-      asm "#endif"
 
       asm ""
 
-      asm "#if defined(__APPLE__)"
       asm "# define movlabelvalreg(src, dst) \\"
       asm "    movq    src##\@GOTPCREL(%rip), %r8 ;\\"
       asm "    movq    (%r8), dst"
-      asm "#else"
-      asm "# define movlabelvalreg(src, dst) movq    src##, dst"
-      asm "#endif"
 
       asm ""
 
-      asm "#if defined(__APPLE__)"
       asm "# define movreglabel(src, dst) \\"
       asm "    movq    dst##\@GOTPCREL(%rip), %r8 ;\\"
       asm "    movq    src, (%r8)"
-      asm "#else"
-      asm "# define movreglabel(src, dst) movq    src, dst"
-      asm "#endif"
 
       asm ""
       asm "        .global cdecl(#{main_name})"
@@ -2234,32 +2225,23 @@ module VM
       asm "#endif"
 
       asm ""
+      asm "# The remaining macros make it easier to specify Position"
+      asm "# Independent Code (PIC)."
+      asm ""
 
-      asm "#if defined(__APPLE__)"
       asm "# define movlabelreg(src, dst) movq    src##\@GOTPCREL(%rip), dst"
-      asm "#else"
-      asm "# define movlabelreg(src, dst) mov     $##src##, dst"
-      asm "#endif"
 
       asm ""
 
-      asm "#if defined(__APPLE__)"
       asm "# define movlabelvalreg(src, dst) \\"
       asm "    movq    src##\@GOTPCREL(%rip), %r8 ;\\"
       asm "    movq    (%r8), dst"
-      asm "#else"
-      asm "# define movlabelvalreg(src, dst) movq    src##, dst"
-      asm "#endif"
 
       asm ""
 
-      asm "#if defined(__APPLE__)"
       asm "# define movreglabel(src, dst) \\"
       asm "    movq    dst##\@GOTPCREL(%rip), %r8 ;\\"
       asm "    movq    src, (%r8)"
-      asm "#else"
-      asm "# define movreglabel(src, dst) movq    src, dst"
-      asm "#endif"
 
       asm ""
       asm "        .global cdecl(#{main_name})"
