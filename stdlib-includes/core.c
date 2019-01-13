@@ -208,6 +208,11 @@ garlic_value_t equal_sign(
             return equal_sign_identity(a, vals);
         default:
             error_and_exit("ERROR: = can only compare numbers and symbols");
+
+            // Control will not reach here, but compilers won't know that.
+            // Return a bogus value just to avoid warnings at high warning
+            // levels.
+            return NIL_VALUE;
     }
 }
 
