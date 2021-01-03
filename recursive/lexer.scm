@@ -10,18 +10,37 @@
 
 (define (lex-non-empty first-char input)
   (cond
+    ; Ignore whitespace
     ((is-space? first-char) (lex (consume-spaces input)))
 
+    ; Open parenthesis
     ((str:string=? first-char "(")
      (cons tok:open-paren (lex (str-rest input))) )
 
+    ; Close parenthesis
     ((str:string=? first-char ")")
      (cons tok:close-paren (lex (str-rest input))) )
 
+    ; Bare integer
     ((is-integer? first-char)
      (let (((int . rest) (consume-integer input 0)))
        (cons (tok:int int) (lex rest))) )
 
+    ; Negative integer
+    ((and
+       (str:string=? first-char "-")
+       (is-integer? (str:at input 1)))
+     (let (((int . rest) (consume-integer (str-rest input) 0)))
+       (cons (tok:int (* -1 int)) (lex rest))) )
+
+    ; Positive integer with explicit "+" sign
+    ((and
+       (str:string=? first-char "+")
+       (is-integer? (str:at input 1)))
+     (let (((int . rest) (consume-integer (str-rest input) 0)))
+       (cons (tok:int int) (lex rest))) )
+
+    ; Identifier
     ((is-identifier-character? first-char)
      (let (((id . rest) (consume-identifier input)))
        (cons (tok:id id) (lex rest))) ) ))
