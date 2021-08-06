@@ -23,21 +23,21 @@
 
     ; Bare integer
     ((is-integer? first-char)
-     (let (((int . rest) (consume-integer input 0)))
+     (let (((int . rest) (consume-integer input)))
        (cons (tok:int int) (lex rest))) )
 
     ; Negative integer
     ((and
        (str:string=? first-char "-")
        (is-integer? (str:at input 1)))
-     (let (((int . rest) (consume-integer (str-rest input) 0)))
+     (let (((int . rest) (consume-integer (str-rest input))))
        (cons (tok:int (* -1 int)) (lex rest))) )
 
     ; Positive integer with explicit "+" sign
     ((and
        (str:string=? first-char "+")
        (is-integer? (str:at input 1)))
-     (let (((int . rest) (consume-integer (str-rest input) 0)))
+     (let (((int . rest) (consume-integer (str-rest input))))
        (cons (tok:int int) (lex rest))) )
 
     ; Identifier
@@ -89,15 +89,35 @@
         ((is-space? (str:at input 0)) (consume-spaces (str-rest input)))
         (else input) ))
 
-(define (consume-integer input preceding)
-  (if (str:null? input)
-    preceding
-    (let ((chr (str:at input 0)))
-      (if (is-integer? chr)
-        (let (((int . rest)
-               (consume-integer (str-rest input) (char-to-int chr))))
-          (cons (+ (* preceding 10) int) rest))
-        (cons preceding input))) ))
+(define (consume-integer input)
+  ;; returns a list of the following:
+  ;;
+  ;;    1. The parsed integer consisting of:
+  ;;
+  ;;       a. The preceding integer portion (multiplied by the appropriate
+  ;;          power due to it being at the left of the remainder).
+  ;;
+  ;;       b. The remainder of the integer at the beginning of the input.
+  ;;
+  ;;    2. Any unparsed remaining part of the string.
+  ;;
+  ;;    3. The power of ten representing the order of magnitude of the parsed
+  ;;       remainder (i.e. disregarding the preceding part). For example, if
+  ;;       the remainder contains one, two or three digits, then the power is
+  ;;       "1", "10", or "100" respectively.
+  (define (helper input preceding)
+    (if (str:null? input)
+        (list preceding "" 1)
+        (let ((chr (str:at input 0)))
+          (if (is-integer? chr)
+            (let* (((int rest power)
+                    (helper (str-rest input) (char-to-int chr)))
+                   (new-power (* power 10)))
+              (list (+ (* preceding new-power) int) rest new-power))
+            (list preceding input 1))) ))
+
+  (let (((int rest _) (helper input 0)))
+    (cons int rest)) )
 
 (define (consume-identifier input)
   (if (str:null? input)
