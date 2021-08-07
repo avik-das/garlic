@@ -1593,7 +1593,8 @@ module AST
     def codegen(vm, program, all_modules)
       vm.asm "        mov     $0, %rsi" if !is_nil_terminated
 
-      @children.reverse.each_with_index do |child, index|
+      filtered_children = @children.reject { |arg| arg.is_a?(Comment) }
+      filtered_children.reverse.each_with_index do |child, index|
         if !is_nil_terminated or index > 0
           vm.push("%rsi")
           child.codegen(vm, program, all_modules)
@@ -1607,7 +1608,7 @@ module AST
           child.codegen(vm, program, all_modules)
         end
 
-        unless index == @children.size - 1
+        unless index == filtered_children.size - 1
           vm.asm "        mov     %rax, %rsi"
         end
       end
