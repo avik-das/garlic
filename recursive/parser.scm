@@ -59,6 +59,8 @@
     (cond ((is-type? type "define") (subtree-to-define tree))
           ((is-type? type "lambda") (subtree-to-lambda tree))
           ((is-type? type "quote") (subtree-to-quoted tree))
+          ((is-type? type "if") (subtree-if-to-cond tree))
+          ((is-type? type "cond") (subtree-cond-to-cond tree))
           (else (subtree-to-function-call tree)) ) ))
 
 (define (subtree-to-define tree)
@@ -124,6 +126,29 @@
         (error-and-exit "ERROR - invalid quoted value ^")) ))
 
   (helper (cdr tree)))
+
+(define (subtree-if-to-cond tree)
+  (let (((keyword condition true-clause false-clause) tree))
+    (ast:conditional
+      (list
+        (ast:conditional-clause
+          (subtree-to-ast condition)
+          (list (subtree-to-ast true-clause)))
+        (ast:conditional-else (list (subtree-to-ast false-clause))))) ))
+
+(define (subtree-cond-to-cond tree)
+  (define (subtree-to-clause subtree)
+    (let* (((condition . body-statements) subtree)
+           (body-statements-ast (map subtree-to-ast body-statements)))
+      (if (and (tok:id? condition)
+               (str:string=? (tok:id-get-name condition) "else"))
+          (ast:conditional-else body-statements-ast)
+          (ast:conditional-clause
+            (subtree-to-ast condition)
+            body-statements-ast)) ))
+
+  (ast:conditional
+    (map subtree-to-clause (cdr tree))) )
 
 (define (subtree-to-function-call tree)
   (let (((fn . args) (map subtree-to-ast tree)))

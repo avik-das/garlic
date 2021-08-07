@@ -24,6 +24,15 @@
 (define (definition name body)
   (list 'definition name body))
 
+(define (conditional-clause condition body-statements)
+  (list 'cond-clause condition body-statements))
+
+(define (conditional-else body-statements)
+  (list 'cond-else body-statements))
+
+(define (conditional clauses)
+  (list 'conditional clauses))
+
 ; Represents a lambda
 (define (function args body)
   (list 'function args body))
@@ -49,6 +58,9 @@
 (define str? (type-checker 'str))
 (define quoted-list? (type-checker 'list))
 (define definition? (type-checker 'definition))
+(define conditional? (type-checker 'conditional))
+(define conditional-clause? (type-checker 'cond-clause))
+(define conditional-else? (type-checker 'cond-else))
 (define function? (type-checker 'function))
 (define function-call? (type-checker 'function-call))
 
@@ -65,6 +77,11 @@
 
 (define definition-get-name (compose car cdr))
 (define definition-get-body (compose car cdr cdr))
+
+(define conditional-get-clauses (compose car cdr))
+(define conditional-clause-get-condition (compose car cdr))
+(define conditional-clause-get-body-statements (compose car cdr cdr))
+(define conditional-else-get-body-statements (compose car cdr))
 
 (define function-get-args (compose car cdr))
 (define function-get-body (compose car cdr cdr))
@@ -84,6 +101,9 @@
   str
   quoted-list
   definition
+  conditional-clause
+  conditional-else
+  conditional
   function
   function-call
 
@@ -96,6 +116,9 @@
   str?
   quoted-list?
   definition?
+  conditional-clause?
+  conditional-else?
+  conditional?
   function?
   function-call?
 
@@ -109,6 +132,10 @@
   quoted-list-get-list
   definition-get-name
   definition-get-body
+  conditional-get-clauses
+  conditional-clause-get-condition
+  conditional-clause-get-body-statements
+  conditional-else-get-body-statements
   function-get-args
   function-get-body
   function-call-get-function

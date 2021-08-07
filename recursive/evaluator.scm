@@ -91,6 +91,36 @@
          (body (lambda-get-body fn)))
     (eval-statement-list body frame-with-args) ))
 
+(define (eval-conditional conditional frame)
+  (define (eval-clause-or-next clause rest)
+    (let* ((condition (ast:conditional-clause-get-condition clause))
+           (condition-passed? (recursive-eval condition frame)))
+      (if condition-passed?
+          (eval-statement-list
+            (ast:conditional-clause-get-body-statements clause)
+            frame)
+          (eval-rest rest)) ))
+
+  (define (eval-else else-clause)
+    (eval-statement-list
+      (ast:conditional-else-get-body-statements else-clause)
+      frame))
+
+  (define (eval-rest clauses)
+    (if (null? clauses)
+        '()
+        (let (((clause . rest) clauses))
+          (cond
+            ((ast:conditional-clause? clause)
+             (eval-clause-or-next clause rest))
+            ((ast:conditional-else? clause)
+             (eval-else clause))
+            (else
+              (display "\033[1;31m" clause "\033[0m") (newline)
+              (error-and-exit "Invalid expression inside conditional ^")) )) ))
+
+  (eval-rest (ast:conditional-get-clauses conditional)))
+
 (define (recursive-eval tree frame)
   (cond ((ast:var? tree) (find-in-frame frame (ast:var-get-name tree)))
         ((ast:int? tree) (ast:int-get-value tree))
@@ -103,6 +133,7 @@
          (map
            (lambda (subtree) (recursive-eval subtree frame))
            (ast:quoted-list-get-list tree)))
+        ((ast:conditional? tree) (eval-conditional tree frame))
         ((ast:function? tree) (ast-function-to-lambda tree frame))
         ((ast:function-call? tree) (eval-call-function tree frame)) ))
 
