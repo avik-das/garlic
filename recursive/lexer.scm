@@ -13,6 +13,9 @@
     ; Ignore whitespace
     ((is-space? first-char) (lex (consume-spaces input)))
 
+    ; Comment
+    ((str:string=? first-char ";") (lex (consume-comment input)))
+
     ; Open parenthesis
     ((str:string=? first-char "(")
      (cons tok:open-paren (lex (str-rest input))) )
@@ -104,6 +107,11 @@
   (cond ((str:null? input) input)
         ((is-space? (str:at input 0)) (consume-spaces (str-rest input)))
         (else input) ))
+
+(define (consume-comment input)
+  (cond ((str:null? input) input)
+        ((str:string=? (str:at input 0) "\n") (str-rest input))
+        (else (consume-comment (str-rest input))) ))
 
 (define (consume-integer input)
   ;; returns a list of the following:
