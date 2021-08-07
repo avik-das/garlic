@@ -6,6 +6,9 @@
 (define (int value)
   (cons 'int value))
 
+(define (bool value)
+  (cons 'bool value))
+
 (define (str value)
   (cons 'str value))
 
@@ -30,6 +33,9 @@
 (define (int? token)
   (is-token-of-compound-type? token 'int) )
 
+(define (bool? token)
+  (is-token-of-compound-type? token 'bool) )
+
 (define (str? token)
   (is-token-of-compound-type? token 'str) )
 
@@ -47,6 +53,7 @@
 
 (define id-get-name cdr)
 (define int-get-value cdr)
+(define bool-get-value cdr)
 (define str-get-value cdr)
 
 ;; EXPORTS ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -55,6 +62,7 @@
   ; Constructors
   id
   int
+  bool
   str
   open-paren
   close-paren
@@ -63,6 +71,7 @@
   ; Predicates
   id?
   int?
+  bool?
   str?
   open-paren?
   close-paren?
@@ -71,4 +80,5 @@
   ; Getters
   id-get-name
   int-get-value
+  bool-get-value
   str-get-value)

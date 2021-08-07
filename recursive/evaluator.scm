@@ -90,6 +90,7 @@
 (define (recursive-eval tree frame)
   (cond ((ast:var? tree) (find-in-frame frame (ast:var-get-name tree)))
         ((ast:int? tree) (ast:int-get-value tree))
+        ((ast:bool? tree) (ast:bool-get-value tree))
         ((ast:str? tree) (ast:str-get-value tree))
         ; For now, just treat an atom like a string, i.e. don't share the value
         ; across multiple usages.

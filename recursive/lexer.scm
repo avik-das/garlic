@@ -52,6 +52,11 @@
      (let (((id . rest) (consume-identifier input)))
        (cons (tok:id id) (lex rest))) )
 
+    ; Boolean
+    ((str:string=? first-char "#")
+     (let (((bool . rest) (consume-boolean (str-rest input))))
+       (cons (tok:bool bool) (lex rest))) )
+
     ; String
     ((str:string=? first-char "\"")
      (let (((str . rest) (consume-string input)))
@@ -161,6 +166,14 @@
 
   (let (((int rest _) (helper input 0)))
     (cons int rest)) )
+
+(define (consume-boolean input)
+  (if (str:null? input)
+      (error-and-exit "ERROR - invalid boolean\n\n" input)
+      (let ((chr (str:at input 0)))
+        (cond ((str:string=? chr "t") (cons #t (str-rest input)))
+              ((str:string=? chr "f") (cons #f (str-rest input)))
+              (else (error-and-exit "ERROR - invalid boolean\n\n" input)) )) ))
 
 (define (consume-string input)
   (if (or (str:null? input)

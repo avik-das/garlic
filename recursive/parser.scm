@@ -45,6 +45,7 @@
 (define (subtree-to-ast tree)
   (cond ((tok:id? tree) (ast:var (tok:id-get-name tree)))
         ((tok:int? tree) (ast:int (tok:int-get-value tree)))
+        ((tok:bool? tree) (ast:bool (tok:bool-get-value tree)))
         ((tok:str? tree) (ast:str (tok:str-get-value tree)))
         ((list? tree) (specialize-subtree tree)) ))
 
@@ -113,6 +114,7 @@
 
       ((tok:id? to-quote) (ast:atom (tok:id-get-name to-quote)))
       ((tok:int? to-quote) (ast:int (tok:int-get-value to-quote)))
+      ((tok:bool? to-quote) (ast:bool (tok:bool-get-value to-quote)))
 
       ((list? to-quote)
        (ast:quoted-list (map helper to-quote)))

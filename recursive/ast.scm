@@ -12,6 +12,9 @@
 (define (atom val)
   (cons 'atom val))
 
+(define (bool val)
+  (cons 'bool val))
+
 (define (str val)
   (cons 'str val))
 
@@ -42,6 +45,7 @@
 (define var? (type-checker 'var))
 (define int? (type-checker 'int))
 (define atom? (type-checker 'atom))
+(define bool? (type-checker 'bool))
 (define str? (type-checker 'str))
 (define quoted-list? (type-checker 'list))
 (define definition? (type-checker 'definition))
@@ -55,6 +59,7 @@
 (define var-get-name cdr)
 (define int-get-value cdr)
 (define atom-get-name cdr)
+(define bool-get-value cdr)
 (define str-get-value cdr)
 (define quoted-list-get-list cdr)
 
@@ -75,6 +80,7 @@
   var
   int
   atom
+  bool
   str
   quoted-list
   definition
@@ -86,6 +92,7 @@
   var?
   int?
   atom?
+  bool?
   str?
   quoted-list?
   definition?
@@ -97,6 +104,7 @@
   var-get-name
   int-get-value
   atom-get-name
+  bool-get-value
   str-get-value
   quoted-list-get-list
   definition-get-name
