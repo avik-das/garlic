@@ -1,5 +1,7 @@
 #include <garlic.h>
 #include "../garlic-internal.h"
+
+#include <ctype.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -84,6 +86,24 @@ garlic_value_t character_at(garlic_value_t str, garlic_value_t index) {
     return garlic_wrap_string(result);
 }
 
+garlic_value_t downcase(garlic_value_t str) {
+    if (garlic_get_type(str) != GARLIC_TYPE_STRING) {
+        error_and_exit("ERROR - string:downcase - value is not a string");
+    }
+
+    const char *cstr = garlic_unwrap_string(str);
+    size_t len = garlic_string_length(str);
+
+    char *result = (char *) malloc(sizeof(char) * (len + 1));
+
+    for (int i = 0; i < len; i++) {
+        result[i] = tolower(cstr[i]);
+    }
+
+    result[len] = 0;
+    return garlic_wrap_string(result);
+}
+
 garlic_native_export_t string_exports[] = {
     {"null?", nullp, 1},
     {"concat", garlic_internal_string_concat, 0, 1},
@@ -92,5 +112,6 @@ garlic_native_export_t string_exports[] = {
     {"symbol->str", symbol_to_str, 1},
     {"string=?", string_equalp, 2},
     {"at", character_at, 2},
+    {"downcase", downcase, 1},
     0
 };
