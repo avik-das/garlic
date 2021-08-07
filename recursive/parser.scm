@@ -55,33 +55,41 @@
 
 (define (subtree-to-define tree)
   (let (((keyword name . body) tree))
-    (if (tok:id? name)
-      ; The first case is a simple value definition:
-      ;
-      ;   (define name body)
-      ;
-      ; In this case, only one statement is supported in the "body", so the
-      ; body is assumed to be a single element list.
-      (ast:definition (tok:id-get-name name) (subtree-to-ast (car body)))
+    (cond ((tok:id? name)
+           ; The first case is a simple value definition:
+           ;
+           ;   (define name body)
+           ;
+           ; In this case, only one statement is supported in the "body", so
+           ; the body is assumed to be a single element list.
+           (ast:definition
+             (tok:id-get-name name)
+             (subtree-to-ast (car body))) )
 
-      ; The second case is if the name is a list:
-      ;
-      ;   (define (function-name arg0 arg1 ...) ...)
-      ;           ^---------- name -----------^
-      ;
-      ; This represents a function definition, and it should be transformed to
-      ; a value definition in which the value is a lambda:
-      ;
-      ;   (define function-name (lambda (arg0 arg 1) ...))
-      (ast:definition
-        (tok:id-get-name (car name))
-        (subtree-to-lambda
-          ; Synthesize a list of tokens representing a lambda. Notice that
-          ; the body, which is a list of trees, is the tail of the lambda list,
-          ; as opposed to the last element.
-          (cons (tok:id "lambda") (cons (cdr name) body)) )) ) ))
+          ((and
+             (list? name)
+             (not (null? name))
+             (tok:id? (car name)))
+           ; The second case is if the name is a list:
+           ;
+           ;   (define (function-name arg0 arg1 ...) ...)
+           ;           ^---------- name -----------^
+           ;
+           ; This represents a function definition, and it should be
+           ; transformed to a value definition in which the value is a lambda:
+           ;
+           ;   (define function-name (lambda (arg0 arg 1) ...))
+           (ast:definition
+             (tok:id-get-name (car name))
+             (subtree-to-lambda
+               ; Synthesize a list of tokens representing a lambda. Notice that
+               ; the body, which is a list of trees, is the tail of the lambda
+               ; list, as opposed to the last element.
+               (cons (tok:id "lambda") (cons (cdr name) body)) )) )
 
-
+          (else
+            (display "\033[1;31m" name "\033[0m") (newline)
+            (error-and-exit "Invalid definition name ^")) )))
 
 (define (subtree-to-lambda tree)
   ; Does not support variadic functions yet. Thus, it is assumed the argument
