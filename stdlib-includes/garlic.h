@@ -1,3 +1,6 @@
+#ifndef GARLIC_H
+#define GARLIC_H
+
 #include <inttypes.h>
 #include <stddef.h>
 
@@ -92,3 +95,5 @@ garlic_value_t garlic_call_function(
         garlic_value_t lambda,
         garlic_value_t *args,
         size_t num_args);
+
+#endif

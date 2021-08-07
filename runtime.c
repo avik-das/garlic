@@ -229,6 +229,43 @@ garlic_value_t garlic_wrap_string(const char *contents) {
     return string;
 }
 
+garlic_value_t garlic_internal_string_concat(garlic_value_t args) {
+    if (args == NIL_VALUE) {
+        return garlic_empty_string;
+    }
+
+    garlic_value_t args_copy = args;
+
+    size_t total_length = 0;
+    while (args_copy != NIL_VALUE) {
+        garlic_value_t item = garlic_car(args_copy);
+        args_copy = garlic_cdr(args_copy);
+
+        if (garlic_get_type(item) != GARLIC_TYPE_STRING) {
+            printf("non-string passed to concat\n");
+            return NIL_VALUE;
+        }
+
+        total_length += garlic_string_length(item);
+    }
+
+    total_length++; // for the NULL-terminator
+
+    char *result = (char *) malloc(sizeof(char) * total_length);
+    size_t start = 0;
+    args_copy = args;
+    while (args_copy != NIL_VALUE) {
+        garlic_value_t item = garlic_car(args_copy);
+        args_copy = garlic_cdr(args_copy);
+
+        const char *str = garlic_unwrap_string(item);
+        strcpy(result + start, str);
+        start += garlic_string_length(item);
+    }
+
+    return garlic_wrap_string(result);
+}
+
 const char * garlic_unwrap_string(garlic_value_t wrapped) {
     if (garlic_get_type(wrapped) != GARLIC_TYPE_STRING) {
         return NULL;

@@ -43,7 +43,10 @@
     ; Identifier
     ((is-identifier-character? first-char)
      (let (((id . rest) (consume-identifier input)))
-       (cons (tok:id id) (lex rest))) ) ))
+       (cons (tok:id id) (lex rest))) )
+
+    (else
+      (error-and-exit "ERROR - could not parse:\n\n" input)) ))
 
 ;; CHARACTER MATCHING ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

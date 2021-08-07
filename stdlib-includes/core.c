@@ -1,7 +1,9 @@
+#include <garlic.h>
+#include "../garlic-internal.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <garlic.h>
 
 // XXX: does not support calling variadic because it is not known at runtime if
 // a function is variadic. Sometimes, it seems to work, we should not depend on
@@ -272,6 +274,11 @@ garlic_value_t display(garlic_value_t vals) {
     return NIL_VALUE;
 }
 
+garlic_value_t error_and_exit_from_garlic(garlic_value_t msgs) {
+    garlic_value_t msg = garlic_internal_string_concat(msgs);
+    error_and_exit(garlic_unwrap_string(msg));
+}
+
 // Many of the functions are lifted straight from the runtime, and so, they do
 // not need to be re-implemented here.
 garlic_native_export_t core_exports[] = {
@@ -291,5 +298,8 @@ garlic_native_export_t core_exports[] = {
     {"=", equal_sign, 2, 1},
 
     {"display", display, 0, 1},
+
+    {"error-and-exit", error_and_exit_from_garlic, 0, 1},
+
     0
 };
