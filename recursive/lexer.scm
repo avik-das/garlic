@@ -41,7 +41,7 @@
        (cons (tok:int int) (lex rest))) )
 
     ; Identifier
-    ((is-identifier-character? first-char)
+    ((is-identifier-character-first? first-char)
      (let (((id . rest) (consume-identifier input)))
        (cons (tok:id id) (lex rest))) )
 
@@ -56,16 +56,31 @@
 (define (is-space? chr)
   (is-char-any-of? chr '(" " "\t" "\n" "\r")))
 
-; TODO: handle numerical characters after the first one
-(define (is-identifier-character? chr)
+(define integer-characters
+  '("0" "1" "2" "3" "4" "5" "6" "7" "8" "9"))
+
+(define identifier-characters-first
+  '("a" "b" "c" "d" "e" "f" "g" "h" "i" "j" "k" "l" "m"
+    "n" "o" "p" "q" "r" "s" "t" "u" "v" "w" "x" "y" "z"
+    "-" "+" "*" "/" "_" "=" "<" ">"))
+
+(define identifier-characters-remaining
+  (append
+    identifier-characters-first
+    integer-characters))
+
+(define (is-identifier-character-first? chr)
   (is-char-any-of?
     (str:downcase chr)
-    '("a" "b" "c" "d" "e" "f" "g" "h" "i" "j" "k" "l" "m"
-      "n" "o" "p" "q" "r" "s" "t" "u" "v" "w" "x" "y" "z"
-      "-" "+" "*" "/" "_" "=" "<" ">") ))
+    identifier-characters-first))
+
+(define (is-identifier-character-remaining? chr)
+  (is-char-any-of?
+    (str:downcase chr)
+    identifier-characters-remaining))
 
 (define (is-integer? chr)
-  (is-char-any-of? chr '("0" "1" "2" "3" "4" "5" "6" "7" "8" "9")))
+  (is-char-any-of? chr integer-characters))
 
 (define (char-to-int chr)
   (cond ((str:string=? chr "0") 0)
@@ -121,13 +136,20 @@
     (cons int rest)) )
 
 (define (consume-identifier input)
-  (if (str:null? input)
-    ""
-    (let ((chr (str:at input 0)))
-      (if (is-identifier-character? chr)
-        (let (((id . rest) (consume-identifier (str-rest input))))
-          (cons (str:concat chr id) rest))
-        (cons "" input))) ))
+  (define (consume input is-acceptable-character?)
+    (if (str:null? input)
+        (cons "" input)
+        (let ((chr (str:at input 0)))
+          (if (is-acceptable-character? chr)
+              (let (((id . rest) (consume-remaining (str-rest input))))
+                (cons (str:concat chr id) rest))
+              (cons "" input))) ))
+
+  (define (consume-remaining input)
+    (consume input is-identifier-character-remaining?))
+
+  (consume input is-identifier-character-first?))
+
 
 ;; EXPORTS ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
