@@ -36,20 +36,15 @@ Some of the major work to be done:
 
 - Support more tokens in the lexer:
 
-  - Strings
-  - Comments
-  - Negative numbers
   - Floats
-  - Booleans
-  - Quoted list and atoms
+  - Dotted lists
 
 - Support a wider variety of language constructs
 
   - `let` bindings
-  - Dotted lists
   - `begin`
-  - Conditionals
   - Variadic functions
+  - Recursive functions
 
 - Implement a module system
 
