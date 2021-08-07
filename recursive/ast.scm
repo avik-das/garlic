@@ -9,6 +9,9 @@
 (define (int val)
   (cons 'int val))
 
+(define (str val)
+  (cons 'str val))
+
 (define (definition name body)
   (list 'definition name body))
 
@@ -32,6 +35,7 @@
 (define module? (type-checker 'garlic-module))
 (define var? (type-checker 'var))
 (define int? (type-checker 'int))
+(define str? (type-checker 'str))
 (define definition? (type-checker 'definition))
 (define function? (type-checker 'function))
 (define function-call? (type-checker 'function-call))
@@ -42,6 +46,7 @@
 (define module-get-statements cdr)
 (define var-get-name cdr)
 (define int-get-value cdr)
+(define str-get-value cdr)
 
 (define definition-get-name (compose car cdr))
 (define definition-get-body (compose car cdr cdr))
@@ -59,6 +64,7 @@
   module
   var
   int
+  str
   definition
   function
   function-call
@@ -67,6 +73,7 @@
   module?
   var?
   int?
+  str?
   definition?
   function?
   function-call?
@@ -75,6 +82,7 @@
   module-get-statements
   var-get-name
   int-get-value
+  str-get-value
   definition-get-name
   definition-get-body
   function-get-args

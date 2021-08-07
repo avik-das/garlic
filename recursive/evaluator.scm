@@ -90,6 +90,7 @@
 (define (recursive-eval tree frame)
   (cond ((ast:var? tree) (find-in-frame frame (ast:var-get-name tree)))
         ((ast:int? tree) (ast:int-get-value tree))
+        ((ast:str? tree) (ast:str-get-value tree))
         ((ast:function? tree) (ast-function-to-lambda tree frame))
         ((ast:function-call? tree) (eval-call-function tree frame)) ))
 

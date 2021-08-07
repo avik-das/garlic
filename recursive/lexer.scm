@@ -48,6 +48,11 @@
      (let (((id . rest) (consume-identifier input)))
        (cons (tok:id id) (lex rest))) )
 
+    ; String
+    ((str:string=? first-char "\"")
+     (let (((str . rest) (consume-string input)))
+       (cons (tok:str str) (lex rest))) )
+
     (else
       (error-and-exit "ERROR - could not parse:\n\n" input)) ))
 
@@ -96,7 +101,17 @@
         ((str:string=? chr "7") 7)
         ((str:string=? chr "8") 8)
         ((str:string=? chr "9") 9)
-        (else 0) ))
+        (else (error-and-exit "Cannot convert to integer: " chr)) ))
+
+(define (is-string-escapable-character? chr)
+  (is-char-any-of? chr '("\"" "\\" "n" "t")))
+
+(define (char-to-escaped-character chr)
+  (cond ((str:string=? chr "\"") "\"")
+        ((str:string=? chr "\\") "\\")
+        ((str:string=? chr  "n") "\n")
+        ((str:string=? chr  "t") "\t")
+        (else (error-and-exit "Cannot convert to escaped character: " chr)) ))
 
 ;; CONSUMPTION LOGIC ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -142,6 +157,34 @@
 
   (let (((int rest _) (helper input 0)))
     (cons int rest)) )
+
+(define (consume-string input)
+  (if (or (str:null? input)
+         (not (str:string=? (str:at input 0) "\"")))
+      (error-and-exit "ERROR - invalid string\n\n" input)
+      (helper-no-escape (str-rest input) "") )
+
+  (define (helper-no-escape input)
+    (if (str:null? input)
+        (error-and-exit "ERROR - unterminated string")
+        (let ((chr (str:at input 0)))
+          (cond
+            ((str:string=? chr "\\") (helper-escaped (str-rest input)))
+            ((str:string=? chr "\"") (cons "" (str-rest input)))
+            (else
+              (let (((str . rest) (helper-no-escape (str-rest input))))
+                (cons (str:concat chr str) rest)) )) )))
+
+  (define (helper-escaped input)
+    (if (str:null? input)
+        (error-and-exit "ERROR - unterminated string after \\ in string")
+        (let ((chr (str:at input 0)))
+          (if (is-string-escapable-character? chr)
+              (let (((str . rest) (helper-no-escape (str-rest input))))
+                (cons (str:concat (char-to-escaped-character chr) str) rest))
+              (error-and-exit
+                "ERROR - invalid character after \\ in string: "
+                chr)) ))) )
 
 (define (consume-identifier input)
   (define (consume input is-acceptable-character?)

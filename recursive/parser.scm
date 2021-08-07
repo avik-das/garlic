@@ -40,6 +40,7 @@
 (define (subtree-to-ast tree)
   (cond ((tok:id? tree) (ast:var (tok:id-get-name tree)))
         ((tok:int? tree) (ast:int (tok:int-get-value tree)))
+        ((tok:str? tree) (ast:str (tok:str-get-value tree)))
         ((list? tree) (specialize-subtree tree)) ))
 
 (define (specialize-subtree tree)
