@@ -20,7 +20,11 @@
               (list (cons "+" +)
                     (cons "-" -)
                     (cons "*" *)
+                    (cons "=" =)
                     (cons "cons" cons)
+                    (cons "car" car)
+                    (cons "cdr" cdr)
+                    (cons "null?" null?)
                     (cons "display" display)
                     (cons "newline" newline))) )
 
@@ -31,7 +35,7 @@
       ls))
 
   (if (null? frame)
-    '()
+    (error-and-exit "Not found in frame: " symbol)
     (let* ((parent (frame-parent frame))
            (symbols (frame-symbols frame))
            (entry (find-in-list symbols)))

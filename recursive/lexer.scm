@@ -84,7 +84,8 @@
 (define identifier-characters-remaining
   (append
     identifier-characters-first
-    integer-characters))
+    integer-characters
+    '("?")))
 
 (define (is-identifier-character-first? chr)
   (is-char-any-of?
