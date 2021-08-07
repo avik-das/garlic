@@ -9,6 +9,24 @@
             0
             (+ 1 (length (cdr ls))) ) )
 
+(define (append l1 l2 . others)
+  ; 1. others is empty
+  ; 2. others has one list
+  ; 3. others has more than one list
+
+  (define (append-one l1 l2)
+    (if (null? l1)
+        l2
+        (cons (car l1) (append (cdr l1) l2)) ) )
+
+  (define (helper lists)
+    (if (null? lists)
+        '()
+        (append-one (car lists) (helper (cdr lists))) ) )
+
+  (append-one l1 (append-one l2 (helper others))) )
+
+
 (define (map f ls)
         (if (null? ls)
             '()
@@ -69,6 +87,7 @@
   newline
   not
   length
+  append
   map
   filter
   reject

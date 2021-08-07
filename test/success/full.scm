@@ -172,6 +172,7 @@
 ; that's fine because the functions are defined in the same scope.
 (display (length '(a b c d))) (newline)
 (display (map (lambda (x) (+ 1 x)) '(1 2 3 4))) (newline)
+(newline)
 
 (define length
         (lambda (ls) (if (null? ls)
@@ -182,6 +183,18 @@
         (lambda (f ls) (if (null? ls)
                            '()
                            (cons (f (car ls)) (map f (cdr ls))) )) )
+
+; The above functions are actually available in the standard library, but they
+; have been redefined to show how defines work. The following ones are the
+; standard ones.
+(display (stdlib:length '(a b c d))) (newline)
+(display (stdlib:map (lambda (x) (+ 1 x)) '(1 2 3 4))) (newline)
+
+; Appends
+(display (append '(1 2) '(3 4))) (newline)
+(display (append '(1 2) '(3 4) '(5))) (newline)
+(display (append '(1 2) '(3 4) '(5) '(6))) (newline)
+(display (append '(1 2) '(3 4) '(5) '(6) '())) (newline)
 
 (newline)
 
