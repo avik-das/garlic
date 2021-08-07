@@ -91,6 +91,13 @@
   (cond ((ast:var? tree) (find-in-frame frame (ast:var-get-name tree)))
         ((ast:int? tree) (ast:int-get-value tree))
         ((ast:str? tree) (ast:str-get-value tree))
+        ; For now, just treat an atom like a string, i.e. don't share the value
+        ; across multiple usages.
+        ((ast:atom? tree) (ast:atom-get-name tree))
+        ((ast:quoted-list? tree)
+         (map
+           (lambda (subtree) (recursive-eval subtree frame))
+           (ast:quoted-list-get-list tree)))
         ((ast:function? tree) (ast-function-to-lambda tree frame))
         ((ast:function-call? tree) (eval-call-function tree frame)) ))
 

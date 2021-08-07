@@ -9,8 +9,14 @@
 (define (int val)
   (cons 'int val))
 
+(define (atom val)
+  (cons 'atom val))
+
 (define (str val)
   (cons 'str val))
+
+(define (quoted-list ls)
+  (cons 'list ls))
 
 (define (definition name body)
   (list 'definition name body))
@@ -35,7 +41,9 @@
 (define module? (type-checker 'garlic-module))
 (define var? (type-checker 'var))
 (define int? (type-checker 'int))
+(define atom? (type-checker 'atom))
 (define str? (type-checker 'str))
+(define quoted-list? (type-checker 'list))
 (define definition? (type-checker 'definition))
 (define function? (type-checker 'function))
 (define function-call? (type-checker 'function-call))
@@ -46,7 +54,9 @@
 (define module-get-statements cdr)
 (define var-get-name cdr)
 (define int-get-value cdr)
+(define atom-get-name cdr)
 (define str-get-value cdr)
+(define quoted-list-get-list cdr)
 
 (define definition-get-name (compose car cdr))
 (define definition-get-body (compose car cdr cdr))
@@ -64,7 +74,9 @@
   module
   var
   int
+  atom
   str
+  quoted-list
   definition
   function
   function-call
@@ -73,7 +85,9 @@
   module?
   var?
   int?
+  atom?
   str?
+  quoted-list?
   definition?
   function?
   function-call?
@@ -82,7 +96,9 @@
   module-get-statements
   var-get-name
   int-get-value
+  atom-get-name
   str-get-value
+  quoted-list-get-list
   definition-get-name
   definition-get-body
   function-get-args

@@ -22,9 +22,14 @@
 
 (define (expression-to-tree tokens)
   (let (((fst . rst) tokens))
-    (if (tok:open-paren? fst)
-      (list-to-tree rst)
-      (list fst rst)) ))
+    (cond
+      ((tok:open-paren? fst) (list-to-tree rst))
+
+      ((tok:single-quote? fst)
+       (let (((quoted unquoted) (expression-to-tree rst)))
+         (list (cons (tok:id "quote") quoted) unquoted)) )
+
+      (else (list fst rst)) )))
 
 (define (list-to-tree tokens)
   (cond ((null? tokens) (list '() '()))
@@ -52,6 +57,7 @@
   (let ((type (car tree)))
     (cond ((is-type? type "define") (subtree-to-define tree))
           ((is-type? type "lambda") (subtree-to-lambda tree))
+          ((is-type? type "quote") (subtree-to-quoted tree))
           (else (subtree-to-function-call tree)) ) ))
 
 (define (subtree-to-define tree)
@@ -99,6 +105,23 @@
     (ast:function
       (map tok:id-get-name args)
       (map subtree-to-ast statements)) ))
+
+(define (subtree-to-quoted tree)
+  (define (helper to-quote)
+    (cond
+      ((null? to-quote) (ast:quoted-list '()))
+
+      ((tok:id? to-quote) (ast:atom (tok:id-get-name to-quote)))
+      ((tok:int? to-quote) (ast:int (tok:int-get-value to-quote)))
+
+      ((list? to-quote)
+       (ast:quoted-list (map helper to-quote)))
+
+      (else
+        (display "\033[1;31m" to-quote "\033[0m") (newline)
+        (error-and-exit "ERROR - invalid quoted value ^")) ))
+
+  (helper (cdr tree)))
 
 (define (subtree-to-function-call tree)
   (let (((fn . args) (map subtree-to-ast tree)))

@@ -24,6 +24,10 @@
     ((str:string=? first-char ")")
      (cons tok:close-paren (lex (str-rest input))) )
 
+    ; Single quote
+    ((str:string=? first-char "'")
+     (cons tok:single-quote (lex (str-rest input))) )
+
     ; Bare integer
     ((is-integer? first-char)
      (let (((int . rest) (consume-integer input)))

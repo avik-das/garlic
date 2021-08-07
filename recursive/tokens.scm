@@ -11,6 +11,7 @@
 
 (define open-paren 'open-paren)
 (define close-paren 'close-paren)
+(define single-quote 'quote)
 
 ;; PREDICATES ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -38,6 +39,9 @@
 (define (close-paren? token)
   (is-token-of-primitive-type? token close-paren))
 
+(define (single-quote? token)
+  (is-token-of-primitive-type? token single-quote))
+
 ;; GETTERS ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; assumes tokens are already validated to be of the correct type
 
@@ -54,6 +58,7 @@
   str
   open-paren
   close-paren
+  single-quote
   
   ; Predicates
   id?
@@ -61,6 +66,7 @@
   str?
   open-paren?
   close-paren?
+  single-quote?
   
   ; Getters
   id-get-name
