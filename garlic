@@ -5,6 +5,7 @@ require 'singleton'
 require 'digest/md5'
 require 'fileutils'
 require 'tempfile'
+require 'pathname'
 require 'set'
 require_relative 'c_parse'
 
@@ -1409,6 +1410,12 @@ module AST
       module_base_name = File.basename(module_name)
 
       main_name = "init_#{wrapper_prefix}"
+      filename_relative = Pathname.new(filename).relative_path_from(Dir.pwd)
+
+      asm("# " + ("-" * 77))
+      asm "# Generated assembly wrapper around #{filename_relative}"
+      asm("# " + ("-" * 77))
+      asm ""
 
       asm "# MACROS: needed for cross-platform compatibility"
 
@@ -2211,9 +2218,10 @@ module VM
         else
           "init_#{@symbol_prefix}"
         end
+      filename_relative = Pathname.new(@filename).relative_path_from(Dir.pwd)
 
       asm("# " + ("-" * 77))
-      asm "# compiled.S"
+      asm "# Compiled assembly from #{filename_relative}"
       asm("# " + ("-" * 77))
       asm ""
 
