@@ -218,6 +218,52 @@ garlic_value_t equal_sign(
     }
 }
 
+garlic_value_t less_than(garlic_value_t a, garlic_value_t b) {
+    enum garlic_value_type typea = garlic_get_type(a);
+    enum garlic_value_type typeb = garlic_get_type(b);
+    if (typea == GARLIC_TYPE_DOUBLE ||
+            typeb == GARLIC_TYPE_DOUBLE) {
+        // At least one of the two values is a float, so coerce both into
+        // floats before comparing.
+        double floata = typea == GARLIC_TYPE_DOUBLE
+            ? garlicval_to_double(a)
+            : (double) garlicval_to_int(a);
+        double floatb = typeb == GARLIC_TYPE_DOUBLE
+            ? garlicval_to_double(b)
+            : (double) garlicval_to_int(b);
+        return floata < floatb ? TRUE_VALUE : FALSE_VALUE;
+    }
+
+    // Both values are integers, so just compare them as ints. This ensures
+    // that large integers don't lose precision by being cast as floats.
+    return garlicval_to_int(a) < garlicval_to_int(b)
+        ? TRUE_VALUE
+        : FALSE_VALUE;
+}
+
+garlic_value_t greater_than(garlic_value_t a, garlic_value_t b) {
+    enum garlic_value_type typea = garlic_get_type(a);
+    enum garlic_value_type typeb = garlic_get_type(b);
+    if (typea == GARLIC_TYPE_DOUBLE ||
+            typeb == GARLIC_TYPE_DOUBLE) {
+        // At least one of the two values is a float, so coerce both into
+        // floats before comparing.
+        double floata = typea == GARLIC_TYPE_DOUBLE
+            ? garlicval_to_double(a)
+            : (double) garlicval_to_int(a);
+        double floatb = typeb == GARLIC_TYPE_DOUBLE
+            ? garlicval_to_double(b)
+            : (double) garlicval_to_int(b);
+        return floata > floatb ? TRUE_VALUE : FALSE_VALUE;
+    }
+
+    // Both values are integers, so just compare them as ints. This ensures
+    // that large integers don't lose precision by being cast as floats.
+    return garlicval_to_int(a) > garlicval_to_int(b)
+        ? TRUE_VALUE
+        : FALSE_VALUE;
+}
+
 void display_single(garlic_value_t val);
 
 void display_cons_inner(garlic_value_t cons) {
@@ -296,6 +342,9 @@ garlic_native_export_t core_exports[] = {
     {"-", difference, 0, 1},
     {"*", product, 0, 1},
     {"=", equal_sign, 2, 1},
+
+    {"<", less_than, 2},
+    {">", greater_than, 2},
 
     {"display", display, 0, 1},
 

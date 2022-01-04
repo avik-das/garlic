@@ -30,6 +30,13 @@
 
 (newline)
 
+;; < and >
+
+(display (> 1.0 2)) (newline)
+(display (< 1 2.0)) (newline)
+
+(newline)
+
 ;; nested and combinations
 (display (+ (* 1 2) 3)) (newline) ; no conversion
 (display (+ (* 1.0 2) 3)) (newline) ; convert to float
