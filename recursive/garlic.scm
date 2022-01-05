@@ -1,6 +1,7 @@
 (require string => str)
 (require file)
 
+(require "location" => loc)
 (require "result")
 
 (require "lexer")
@@ -17,13 +18,29 @@
   '())
 
 (define (show-errors errs)
+  (define (show-single-error err)
+    ; TODO: show snippet from original file
+    (let ((loc (lexer:lex-error-get-location err))
+          (msg (lexer:lex-error-get-message err)))
+      (display
+        "  "
+        "ERROR: "
+        msg
+        " ("
+        (loc:get-filename loc)
+        ":"
+        (loc:get-line loc)
+        ":"
+        (loc:get-column loc)
+        ")")
+      (newline)))
+
   (define (show-remaining-errors errs)
     (if (null? errs)
         '()
         (begin
           (newline)
-          (display "  " (car errs)) ; TODO: show errors with context
-          (newline)
+          (show-single-error (car errs))
           (show-remaining-errors (cdr errs))) ))
 
   (let ((num-errors (length errs)))
@@ -37,8 +54,9 @@
 
   (show-remaining-errors errs))
 
-(define input (file:read-text (car (cdr *argv*))) )
-(define lexed (lexer:lex input))
+(define filename (car (cdr *argv*)))
+(define input (file:read-text filename) )
+(define lexed (lexer:lex filename input))
 
 (if (result:is-error? lexed)
     (begin

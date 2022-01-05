@@ -1,48 +1,51 @@
 (require string => str)
 
+(require "location" => loc)
 (require "result")
 (require "tokens" => tok)
 
 ;; HIGH LEVEL LOGIC ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(define (lex input)
-  (state-get-result (lex-possibly-empty input)) )
+(define (lex filename input)
+  (state-get-result (lex-possibly-empty (loc:start filename) input)) )
 
-(define (lex-possibly-empty input)
+(define (lex-possibly-empty loc input)
   (if (str:null? input)
-      (state-new-success '() input)
-      (lex-non-empty (str:at input 0) input)) )
+      (state-new-success '() loc input)
+      (lex-non-empty (str:at input 0) loc input)) )
 
-(define (lex-non-empty first-char input)
+(define (lex-non-empty first-char loc input)
   (cond
     ; Ignore whitespace
-    ((is-space? first-char) (lex-after-discard (consume-spaces input)))
+    ((is-space? first-char)
+     (lex-after-discard (consume-spaces loc input)))
 
     ; Comment
-    ((str:string=? first-char ";") (lex-after-discard (consume-comment input)))
+    ((str:string=? first-char ";")
+     (lex-after-discard (consume-comment loc input)))
 
     ; Open parenthesis
     ((str:string=? first-char "(")
      (state-cons-success
        tok:open-paren
-       (lex-possibly-empty (str-rest input))) )
+       (lex-possibly-empty (loc:next-column loc) (str-rest input))) )
 
     ; Close parenthesis
     ((str:string=? first-char ")")
      (state-cons-success
        tok:close-paren
-       (lex-possibly-empty (str-rest input))) )
+       (lex-possibly-empty (loc:next-column loc) (str-rest input))) )
 
     ; Single quote
     ((str:string=? first-char "'")
      (state-cons-success
        tok:single-quote
-       (lex-possibly-empty (str-rest input))) )
+       (lex-possibly-empty (loc:next-column loc) (str-rest input))) )
 
     ; Bare integer
     ((is-integer? first-char)
      (lex-after-consumption
-       (consume-integer input)
+       (consume-integer loc input)
        (lambda (int) (tok:int int))))
 
     ; Negative integer
@@ -50,7 +53,7 @@
        (str:string=? first-char "-")
        (is-integer? (str:at input 1)))
      (lex-after-consumption
-       (consume-integer (str-rest input))
+       (consume-integer (loc:next-column loc) (str-rest input))
        (lambda (int) (tok:int (* -1 int)))))
 
     ; Positive integer with explicit "+" sign
@@ -58,43 +61,47 @@
        (str:string=? first-char "+")
        (is-integer? (str:at input 1)))
      (lex-after-consumption
-       (consume-integer (str-rest input))
+       (consume-integer (loc:next-column loc) (str-rest input))
        (lambda (int) (tok:int int))))
 
     ; Identifier
     ((is-identifier-character-first? first-char)
      (lex-after-consumption
-       (consume-identifier input)
+       (consume-identifier loc input)
        (lambda (id) (tok:id id))))
 
     ; Boolean
     ((str:string=? first-char "#")
      (lex-after-consumption
-       (consume-boolean (str-rest input))
+       (consume-boolean (loc:next-column loc) (str-rest input))
        (lambda (bool) (tok:bool bool))))
 
     ; String
     ((str:string=? first-char "\"")
      (lex-after-consumption
-       (consume-string input)
+       (consume-string loc input)
        (lambda (str) (tok:str str))))
 
     (else
       (state-new-with-single-error
-        (str:concat "Unrecognized character '" first-char "'")
+        (lex-error-new loc "Unrecognized character '" first-char "'")
+        loc
         input) )))
 
 (define (lex-after-discard state-after-discard)
-  (lex-possibly-empty (state-get-rest state-after-discard)) )
+  (lex-possibly-empty
+    (state-get-location state-after-discard)
+    (state-get-rest state-after-discard)) )
 
 (define (lex-after-consumption consumption-state token-on-success)
   (if (state-is-success? consumption-state)
       (let* ((consumption-result (state-get-result consumption-state))
              (consumption-value (result:get-value consumption-result))
+             (loc (state-get-location consumption-state))
              (rest (state-get-rest consumption-state)))
         (state-transform-success
           (lambda (tokens) (cons (token-on-success consumption-value) tokens))
-          (lex-possibly-empty rest)) )
+          (lex-possibly-empty loc rest)) )
 
       ; This branch is actually a bit tricky. The consumption state technically
       ; holds a different type of value (a single token) than the lexer state
@@ -124,14 +131,15 @@
 ;; both, it's just important to make sure to convert between the two usages of
 ;; that data structure as necessary.
 
-(define (state-new result rest) (cons result rest))
-(define (state-new-success value rest)
-  (state-new (result:new-success value) rest))
-(define (state-new-with-single-error err rest)
-  (state-new (result:new-with-single-error err) rest))
+(define (state-new result loc rest) (list result loc rest))
+(define (state-new-success value loc rest)
+  (state-new (result:new-success value) loc rest))
+(define (state-new-with-single-error err loc rest)
+  (state-new (result:new-with-single-error err) loc rest))
 
 (define state-get-result car)
-(define state-get-rest cdr)
+(define state-get-location (compose car cdr))
+(define state-get-rest (compose car cdr cdr))
 
 (define (state-is-success? state)
   (result:is-success? (state-get-result state)))
@@ -141,12 +149,28 @@
     (result:transform-success
       (lambda (value) (result:new-success (transformer value)))
       (state-get-result state))
+    (state-get-location state)
     (state-get-rest state)))
 
 (define (state-cons-success head state)
   (state-transform-success
     (lambda (value) (cons head value))
     state))
+
+;; LEXER ERROR ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; In the above "state" data structure, errors will be reported using the
+;; following "error" data structure. The error consists of both a message and
+;; the location where the error occurred.
+;;
+;; While these errors can only be constructed from within this module, the data
+;; inside the errors can be retrieved outside this module.
+
+(define (lex-error-new loc . msg-parts)
+  (cons loc (apply str:concat msg-parts)) )
+
+(define lex-error-get-location car)
+(define lex-error-get-message cdr)
 
 ;; CHARACTER MATCHING ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -211,18 +235,29 @@
 (define (str-rest str)
   (str:string-tail str 1))
 
-(define (consume-spaces input)
-  (cond ((str:null? input) (state-new-success '() input))
-        ((is-space? (str:at input 0)) (consume-spaces (str-rest input)))
-        (else (state-new-success '() input)) ))
+(define (consume-spaces loc input)
+  (cond
+    ((str:null? input) (state-new-success '() loc input))
 
-(define (consume-comment input)
-  (cond ((str:null? input) (state-new-success '() input))
-        ((str:string=? (str:at input 0) "\n")
-         (state-new-success '() (str-rest input)))
-        (else (consume-comment (str-rest input))) ))
+    ; TODO - handle "\r\n"
+    ((str:string=? (str:at input 0) "\n")
+     (consume-spaces (loc:next-line loc) (str-rest input)))
 
-(define (consume-integer input)
+    ((is-space? (str:at input 0))
+     (consume-spaces (loc:next-column loc) (str-rest input)))
+
+    (else (state-new-success '() loc input)) ))
+
+(define (consume-comment loc input)
+  (cond
+    ((str:null? input) (state-new-success '() loc input))
+
+    ((str:string=? (str:at input 0) "\n")
+     (state-new-success '() (loc:next-line loc) (str-rest input)))
+
+    (else (consume-comment (loc:next-column loc) (str-rest input))) ))
+
+(define (consume-integer loc input)
   ;; Returns a list of the following:
   ;;
   ;;    1. The parsed integer consisting of:
@@ -251,63 +286,101 @@
 
   (let (((int rest _) (helper input 0)))
     ; TODO - support returning errors
-    (state-new-success int rest)) )
+    ; TODO - track location!
+    (state-new-success int loc rest)) )
 
-(define (consume-boolean input)
+(define (consume-boolean loc input)
   (if (str:null? input)
-      (state-new-with-single-error "# appears at end of file" input)
+      (state-new-with-single-error
+        (lex-error-new loc "# appears at end of file")
+        loc
+        input)
 
-      (let ((chr (str:at input 0)))
+      (let ((chr (str:at input 0))
+            (next-loc (loc:next-column loc)))
         (cond ((str:string=? chr "t")
-               (state-new-success #t (str-rest input)))
+               (state-new-success #t next-loc (str-rest input)))
 
               ((str:string=? chr "f")
-               (state-new-success #f (str-rest input)))
+               (state-new-success #f next-loc (str-rest input)))
 
               (else
                 (state-new-with-single-error
-                  (str:concat "# followed by unrecognized character '" chr "'")
+                  (lex-error-new
+                    loc
+                    "# followed by unrecognized character '" chr "'")
+                  loc
                   input)) )) ))
 
-(define (consume-string input)
+(define (consume-string start-loc input)
   (if (or (str:null? input)
           (not (str:string=? (str:at input 0) "\"")))
-      (state-new-with-single-error "string does not start with \"" input)
-      (helper-no-escape (str-rest input)) )
+      (state-new-with-single-error
+        (lex-error-new start-loc "string does not start with \"")
+        start-loc
+        input)
+      (helper-no-escape (loc:next-column start-loc) (str-rest input)) )
 
-  (define (helper-no-escape input)
+  (define (helper-no-escape loc input)
     (if (str:null? input)
-        (state-new-with-single-error "unterminated string" input)
+
+        (state-new-with-single-error
+          (lex-error-new
+            start-loc
+            "unterminated string (start position shown)")
+          loc
+          input)
+
         (let ((chr (str:at input 0)))
           (cond
-            ((str:string=? chr "\\") (helper-escaped (str-rest input)))
+            ((str:string=? chr "\\")
+             (helper-escaped (loc:next-column loc) (str-rest input)))
+
             ((str:string=? chr "\"")
-             (state-new-success "" (str-rest input)))
+             (state-new-success "" (loc:next-column loc) (str-rest input)))
+
+            ; TODO - handle "\r\n"
+            ((str:string=? chr "\n")
+              (state-transform-success
+                (lambda (str) (str:concat chr str))
+                (helper-no-escape (loc:next-line loc) (str-rest input))) )
+
             (else
               (state-transform-success
                 (lambda (str) (str:concat chr str))
-                (helper-no-escape (str-rest input))) )) )))
+                (helper-no-escape
+                  (loc:next-column loc)
+                  (str-rest input))) )) )))
 
-  (define (helper-escaped input)
+  (define (helper-escaped loc input)
     (if (str:null? input)
-        (state-new-with-single-error "unterminated string" input)
+
+        (state-new-with-single-error
+          (lex-error-new
+            start-loc
+            "unterminated string (start position shown)")
+          loc
+          input)
+
         (let ((chr (str:at input 0)))
           (if (is-string-escapable-character? chr)
+
               (state-transform-success
                 (lambda (str) (str:concat (char-to-escaped-character chr) str))
-                (helper-no-escape (str-rest input)))
+                (helper-no-escape (loc:next-column loc) (str-rest input)))
 
               (state-new-with-single-error
-                (str:concat "invalid character after \\ in string: ")
+                (lex-error-new loc "invalid character after \\ in string: ")
+                loc
                 input)) ))) )
 
-(define (consume-identifier input)
-  (define (consume input is-acceptable-character?)
+(define (consume-identifier loc input)
+  (define (consume loc input is-acceptable-character?)
     (if (str:null? input)
-        (state-new-success "" input)
-        (consume-non-empty input is-acceptable-character?)))
+        (state-new-success "" loc input)
+        (consume-non-empty loc input is-acceptable-character?)))
 
-  (define (consume-non-empty input is-acceptable-character?)
+  (define (consume-non-empty loc input is-acceptable-character?)
     (let ((chr (str:at input 0)))
       ; TODO - distinguish between whitespace/delimiters (e.g. parens) and
       ;   other non-identifier characters. The former should end the
@@ -315,15 +388,18 @@
       (if (is-acceptable-character? chr)
           (state-transform-success
             (lambda (id) (str:concat chr id))
-            (consume-remaining (str-rest input)))
-          (state-new-success "" input))))
+            (consume-remaining (loc:next-column loc) (str-rest input)))
+          (state-new-success "" loc input))))
 
-  (define (consume-remaining input)
-    (consume input is-identifier-character-remaining?))
+  (define (consume-remaining loc input)
+    (consume loc input is-identifier-character-remaining?))
 
-  (consume input is-identifier-character-first?))
+  (consume loc input is-identifier-character-first?))
 
 ;; EXPORTS ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (module-export
-  lex)
+  lex
+
+  lex-error-get-location
+  lex-error-get-message)
