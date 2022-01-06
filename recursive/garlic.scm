@@ -98,22 +98,19 @@
 
 (define filename (car (cdr *argv*)))
 (define input (file:read-text filename) )
-(define lexed (lexer:lex filename input))
 
-(if (result:is-error? lexed)
+(define final-result
+  (result:pipeline-successes
+    (result:new-success input)
+    (lambda (input) (lexer:lex filename input))
+    (lambda (lexed) (parser:parse lexed))
+    (lambda (parsed)
+      (evaluator:eval-module parsed)
+      (result:new-success '())) ))
+
+(if (result:is-error? final-result)
     (begin
-      (show-errors input (result:get-errors lexed))
+      (show-errors input (result:get-errors final-result))
       (newline)
       (error-and-exit "COMPILATION FAILED"))
     '() ) ; Otherwise: continue
-
-(define parsed (parser:parse (result:get-value lexed)))
-
-(if (result:is-error? parsed)
-    (begin
-      (show-errors input (result:get-errors parsed))
-      (newline)
-      (error-and-exit "COMPILATION FAILED"))
-    '() ) ; Otherwise: continue
-
-(evaluator:eval-module (result:get-value parsed))

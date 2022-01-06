@@ -54,6 +54,31 @@
       (transformer (get-value result))
       result ))
 
+; Given a "result" object, pass it through the given list of transformations,
+; short-circuiting whenever one of the transformations fails (this includes if
+; the original "result" is an error).
+(define (pipeline-successes result . transformers)
+  (define (non-variadic result transformers)
+    ; This pipeline is a bit hacky if you think about it in terms of types.
+    ; Each step of the pipeline returns a potentially different type of
+    ; "result" object, which can be thought of as types like Result<T0>,
+    ; Result<T1>, etc. Thus, the end result should always be Result<TN>.
+    ;
+    ; However, as soon as one of the transformation fails, that error result is
+    ; returned immediately. So possibly, this pipeline returns Result<TM>,
+    ; where M < N. However, in a dynamically typed language, because Result<TM>
+    ; contains an error, it is indistinguishable from Result<TN>. Just
+    ; something to be aware of.
+    (if (null? transformers)
+        result
+        (transform-success (continuation transformers) result) ))
+
+  (define (continuation transformers)
+    (let (((fn . rest-fns) transformers))
+      (lambda (value) (non-variadic (fn value) rest-fns)) ))
+
+  (non-variadic result transformers))
+
 (define (add-error err result)
   (if (is-success? result)
       (new-with-single-error err)
@@ -77,4 +102,5 @@
 
   ; Transformations
   transform-success
+  pipeline-successes
   add-error)
