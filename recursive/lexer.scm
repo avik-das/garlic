@@ -177,8 +177,19 @@
 (define (is-char-any-of? chr ls)
   (any? (lambda (test) (str:string=? chr test)) ls))
 
+(define space-characters
+  '(" " "\t" "\n" "\r"))
+
 (define (is-space? chr)
-  (is-char-any-of? chr '(" " "\t" "\n" "\r")))
+  (is-char-any-of? chr space-characters))
+
+(define delimeter-characters
+  (append
+    space-characters
+    '("(" ")" ";")))
+
+(define (is-delimeter? chr)
+  (is-char-any-of? chr delimeter-characters))
 
 (define integer-characters
   '("0" "1" "2" "3" "4" "5" "6" "7" "8" "9"))
@@ -267,27 +278,38 @@
   ;;
   ;;       b. The remainder of the integer at the beginning of the input.
   ;;
-  ;;    2. Any unparsed remaining part of the string.
+  ;;    2. The new source location at the start of any unparsed remaining part
+  ;;       of the string.
   ;;
-  ;;    3. The power of ten representing the order of magnitude of the parsed
+  ;;    3. Any unparsed remaining part of the string.
+  ;;
+  ;;    4. The power of ten representing the order of magnitude of the parsed
   ;;       remainder (i.e. disregarding the preceding part). For example, if
   ;;       the remainder contains one, two or three digits, then the power is
   ;;       "1", "10", or "100" respectively.
-  (define (helper input preceding)
+  (define (helper loc input preceding)
     (if (str:null? input)
-        (list preceding "" 1)
+        (list preceding loc "" 1)
         (let ((chr (str:at input 0)))
           (if (is-integer? chr)
-            (let* (((int rest power)
-                    (helper (str-rest input) (char-to-int chr)))
+            (let* ((next-loc (loc:next-column loc))
+                   ((int rest-loc rest power)
+                    (helper next-loc (str-rest input) (char-to-int chr)))
                    (new-power (* power 10)))
-              (list (+ (* preceding new-power) int) rest new-power))
-            (list preceding input 1))) ))
+              (list (+ (* preceding new-power) int) rest-loc rest new-power))
+            (list preceding loc input 1))) ))
 
-  (let (((int rest _) (helper input 0)))
-    ; TODO - support returning errors
-    ; TODO - track location!
-    (state-new-success int loc rest)) )
+  (let (((int new-loc rest _) (helper loc input 0)))
+    (if (or (str:null? rest)
+            (is-delimeter? (str:at rest 0)))
+        (state-new-success int new-loc rest)
+
+        (state-new-with-single-error
+          (lex-error-new
+            new-loc
+            "unexpected character when parsing integer: '" (str:at rest 0) "'")
+          loc
+          input)) ))
 
 (define (consume-boolean loc input)
   (if (str:null? input)
