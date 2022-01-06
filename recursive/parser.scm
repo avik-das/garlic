@@ -1,7 +1,9 @@
 (require string => str)
 
-(require "tokens" => tok)
 (require "ast")
+(require "compiler-error" => err)
+(require "result")
+(require "tokens" => tok)
 
 ;; PARSE LOGIC ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -10,36 +12,93 @@
 ;; @param tokens - a flat list of tokens, as produced by the lexer
 ;; @return the abstract syntax tree, with the nesting suggested by the tokens
 (define (parse tokens)
-  (let* (((tree rst) (list-to-tree tokens))
-         (parsed (tree-to-ast tree)))
-    (if (not (null? rst))
-      (begin
-        (display "[WARN] remaining unparsed tokens: ")
-        (display tokens)
-        (newline)
-        parsed)
-      parsed)))
+  (result:transform-success
+    ; TODO - when tree-to-ast is refactored to return a "result", there will be
+    ;   no need to wrap the return value in a new "result"
+    (lambda (tree) (result:new-success (tree-to-ast tree)))
+    (toplevel-list-to-tree tokens)))
+
+;; TREE STRUCTURE GENERATION ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; This phase of the parsing simply arranges the tokens into a tree structure,
+;; without actually interpreting any of the tokens (other than the open and
+;; close parentheses).
+
+;; The only exception is the single quote token, which is transformed into a
+;; "quote" special form. This is because the single quote is like a reader
+;; macro that can affect multiple tokens after it (in the case the quote is
+;; followed by a list) and therefore affects the tree structure.
 
 (define (expression-to-tree tokens)
-  (let (((fst . rst) tokens))
+  (let (((fst . rest) tokens))
     (cond
-      ((tok:open-paren? fst) (list-to-tree rst))
+      ((tok:open-paren? fst) (list-to-tree (tok:get-location fst) rest))
 
       ((tok:single-quote? fst)
-       (let (((quoted unquoted) (expression-to-tree rst)))
-         (list
-           (cons (tok:id (tok:get-location fst) "quote") quoted)
-           unquoted)) )
+       (result:transform-success
+         (lambda (quoted-and-unquoted)
+           (let (((quoted unquoted) quoted-and-unquoted))
+             (result:new-success
+               (list
+                 (cons (tok:id (tok:get-location fst) "quote") quoted)
+                 unquoted)) ))
+         (expression-to-tree rest)))
 
-      (else (list fst rst)) )))
+      (else (result:new-success (list fst rest))) )))
 
-(define (list-to-tree tokens)
-  (cond ((null? tokens) (list '() '()))
-        ((tok:close-paren? (car tokens)) (list '() (cdr tokens)))
-        (else
-          (let* (((fst rst) (expression-to-tree tokens))
-                 ((ls tail) (list-to-tree rst)))
-            (list (cons fst ls) tail)) )))
+(define (toplevel-list-to-tree tokens)
+  (cond
+    ((null? tokens) (result:new-success '()))
+
+    ((tok:close-paren? (car tokens))
+     (result:add-error
+       (err:new
+         (tok:get-location (car tokens))
+         "unexpected closing parenthesis")
+       ; Make sure to continue parsing, ignoring the extra close parenthesis.
+       ; That way, if there are multiple places with too many closing
+       ; parentheses, they can all be reported in one shot.
+       (toplevel-list-to-tree (cdr tokens))))
+
+    (else
+      ; The only reason 'expression-to-tree' will fail is if we run out of
+      ; tokens, in which case there won't be any additional parsing to be done
+      ; in case of a failure.
+      (result:transform-success
+        (lambda (fst-and-rest)
+          (let (((fst rest) fst-and-rest))
+            (result:transform-success
+              (lambda (remainder-list)
+                (result:new-success (cons fst remainder-list)))
+              (toplevel-list-to-tree rest)) ))
+          (expression-to-tree tokens)) ) ))
+
+(define (list-to-tree open-paren-loc tokens)
+  (cond
+    ((null? tokens)
+     (result:new-with-single-error
+       (err:new
+         open-paren-loc
+         "unterminated list (start position shown)")))
+
+    ((tok:close-paren? (car tokens))
+     (result:new-success (list '() (cdr tokens))))
+
+    (else
+      ; The only reason 'expression-to-tree' will fail is if we run out of
+      ; tokens, in which case there won't be any additional parsing to be done
+      ; in case of a failure.
+      (result:transform-success
+        (lambda (fst-and-rest)
+          (let (((fst rest) fst-and-rest))
+            (result:transform-success
+              (lambda (list-tail-and-remaining-tokens)
+                (result:new-success
+                  (list
+                    (cons fst (car list-tail-and-remaining-tokens))
+                    (car (cdr list-tail-and-remaining-tokens)))) )
+              (list-to-tree open-paren-loc rest)) ))
+          (expression-to-tree tokens)) ) ))
 
 (define (tree-to-ast tree)
   (ast:module (map subtree-to-ast tree)))

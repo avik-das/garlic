@@ -108,4 +108,12 @@
     '() ) ; Otherwise: continue
 
 (define parsed (parser:parse (result:get-value lexed)))
-(evaluator:eval-module parsed)
+
+(if (result:is-error? parsed)
+    (begin
+      (show-errors input (result:get-errors parsed))
+      (newline)
+      (error-and-exit "COMPILATION FAILED"))
+    '() ) ; Otherwise: continue
+
+(evaluator:eval-module (result:get-value parsed))
