@@ -1,5 +1,6 @@
 (require string => str)
 
+(require "compiler-error" => err)
 (require "location" => loc)
 (require "result")
 (require "tokens" => tok)
@@ -84,7 +85,7 @@
 
     (else
       (state-new-with-single-error
-        (lex-error-new loc "Unrecognized character '" first-char "'")
+        (err:new loc "Unrecognized character '" first-char "'")
         loc
         input) )))
 
@@ -156,21 +157,6 @@
   (state-transform-success
     (lambda (value) (cons head value))
     state))
-
-;; LEXER ERROR ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-;; In the above "state" data structure, errors will be reported using the
-;; following "error" data structure. The error consists of both a message and
-;; the location where the error occurred.
-;;
-;; While these errors can only be constructed from within this module, the data
-;; inside the errors can be retrieved outside this module.
-
-(define (lex-error-new loc . msg-parts)
-  (cons loc (apply str:concat msg-parts)) )
-
-(define lex-error-get-location car)
-(define lex-error-get-message cdr)
 
 ;; CHARACTER MATCHING ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -305,7 +291,7 @@
         (state-new-success int new-loc rest)
 
         (state-new-with-single-error
-          (lex-error-new
+          (err:new
             new-loc
             "unexpected character when parsing integer: '" (str:at rest 0) "'")
           loc
@@ -314,7 +300,7 @@
 (define (consume-boolean loc input)
   (if (str:null? input)
       (state-new-with-single-error
-        (lex-error-new loc "# appears at end of file")
+        (err:new loc "# appears at end of file")
         loc
         input)
 
@@ -328,7 +314,7 @@
 
               (else
                 (state-new-with-single-error
-                  (lex-error-new
+                  (err:new
                     loc
                     "# followed by unrecognized character '" chr "'")
                   loc
@@ -338,7 +324,7 @@
   (if (or (str:null? input)
           (not (str:string=? (str:at input 0) "\"")))
       (state-new-with-single-error
-        (lex-error-new start-loc "string does not start with \"")
+        (err:new start-loc "string does not start with \"")
         start-loc
         input)
       (helper-no-escape (loc:next-column start-loc) (str-rest input)) )
@@ -347,7 +333,7 @@
     (if (str:null? input)
 
         (state-new-with-single-error
-          (lex-error-new
+          (err:new
             start-loc
             "unterminated string (start position shown)")
           loc
@@ -378,7 +364,7 @@
     (if (str:null? input)
 
         (state-new-with-single-error
-          (lex-error-new
+          (err:new
             start-loc
             "unterminated string (start position shown)")
           loc
@@ -392,7 +378,7 @@
                 (helper-no-escape (loc:next-column loc) (str-rest input)))
 
               (state-new-with-single-error
-                (lex-error-new loc "invalid character after \\ in string: ")
+                (err:new loc "invalid character after \\ in string: ")
                 loc
                 input)) ))) )
 
@@ -421,7 +407,4 @@
 ;; EXPORTS ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (module-export
-  lex
-
-  lex-error-get-location
-  lex-error-get-message)
+  lex)

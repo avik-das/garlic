@@ -1,6 +1,7 @@
 (require string => str)
 (require file)
 
+(require "compiler-error" => err)
 (require "location" => loc)
 (require "result")
 
@@ -38,11 +39,11 @@
           (else 1) ))
 
   (define (show-single-error err)
-    (let* ((loc (lexer:lex-error-get-location err))
+    (let* ((loc (err:get-location err))
            (line (loc:get-line loc))
            (column (loc:get-column loc))
 
-           (msg (lexer:lex-error-get-message err))
+           (msg (err:get-message err))
 
            (num-chars-in-lineno (num-digits-for-positive-int line)))
       (display
