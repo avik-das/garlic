@@ -1,20 +1,20 @@
 ;; CONSTRUCTORS ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(define (id name)
-  (cons 'id name))
+(define (id loc name)
+  (list 'id loc name))
 
-(define (int value)
-  (cons 'int value))
+(define (int loc value)
+  (list 'int loc value))
 
-(define (bool value)
-  (cons 'bool value))
+(define (bool loc value)
+  (list 'bool loc value))
 
-(define (str value)
-  (cons 'str value))
+(define (str loc value)
+  (list 'str loc value))
 
-(define open-paren 'open-paren)
-(define close-paren 'close-paren)
-(define single-quote 'quote)
+(define (open-paren loc) (list 'open-paren loc))
+(define (close-paren loc) (list 'close-paren loc))
+(define (single-quote loc) (list 'single-quote loc))
 
 ;; PREDICATES ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -22,10 +22,6 @@
   (and (list? token)
        (symbol? (car token))
        (= (car token) type)) )
-
-(define (is-token-of-primitive-type? token type)
-  (and (symbol? token)
-       (= token type)))
 
 (define (id? token)
   (is-token-of-compound-type? token 'id) )
@@ -40,21 +36,23 @@
   (is-token-of-compound-type? token 'str) )
 
 (define (open-paren? token)
-  (is-token-of-primitive-type? token open-paren))
+  (is-token-of-compound-type? token 'open-paren))
 
 (define (close-paren? token)
-  (is-token-of-primitive-type? token close-paren))
+  (is-token-of-compound-type? token 'close-paren))
 
 (define (single-quote? token)
-  (is-token-of-primitive-type? token single-quote))
+  (is-token-of-compound-type? token 'single-quote))
 
 ;; GETTERS ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; assumes tokens are already validated to be of the correct type
 
-(define id-get-name cdr)
-(define int-get-value cdr)
-(define bool-get-value cdr)
-(define str-get-value cdr)
+(define get-location (compose car cdr))
+
+(define id-get-name (compose car cdr cdr))
+(define int-get-value (compose car cdr cdr))
+(define bool-get-value (compose car cdr cdr))
+(define str-get-value (compose car cdr cdr))
 
 ;; EXPORTS ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -78,6 +76,7 @@
   single-quote?
   
   ; Getters
+  get-location
   id-get-name
   int-get-value
   bool-get-value

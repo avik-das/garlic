@@ -27,26 +27,26 @@
     ; Open parenthesis
     ((str:string=? first-char "(")
      (state-cons-success
-       tok:open-paren
+       (tok:open-paren loc)
        (lex-possibly-empty (loc:next-column loc) (str-rest input))) )
 
     ; Close parenthesis
     ((str:string=? first-char ")")
      (state-cons-success
-       tok:close-paren
+       (tok:close-paren loc)
        (lex-possibly-empty (loc:next-column loc) (str-rest input))) )
 
     ; Single quote
     ((str:string=? first-char "'")
      (state-cons-success
-       tok:single-quote
+       (tok:single-quote loc)
        (lex-possibly-empty (loc:next-column loc) (str-rest input))) )
 
     ; Bare integer
     ((is-integer? first-char)
      (lex-after-consumption
        (consume-integer loc input)
-       (lambda (int) (tok:int int))))
+       (lambda (int) (tok:int loc int))))
 
     ; Negative integer
     ((and
@@ -54,7 +54,7 @@
        (is-integer? (str:at input 1)))
      (lex-after-consumption
        (consume-integer (loc:next-column loc) (str-rest input))
-       (lambda (int) (tok:int (* -1 int)))))
+       (lambda (int) (tok:int loc (* -1 int)))))
 
     ; Positive integer with explicit "+" sign
     ((and
@@ -62,25 +62,25 @@
        (is-integer? (str:at input 1)))
      (lex-after-consumption
        (consume-integer (loc:next-column loc) (str-rest input))
-       (lambda (int) (tok:int int))))
+       (lambda (int) (tok:int loc int))))
 
     ; Identifier
     ((is-identifier-character-first? first-char)
      (lex-after-consumption
        (consume-identifier loc input)
-       (lambda (id) (tok:id id))))
+       (lambda (id) (tok:id loc id))))
 
     ; Boolean
     ((str:string=? first-char "#")
      (lex-after-consumption
        (consume-boolean (loc:next-column loc) (str-rest input))
-       (lambda (bool) (tok:bool bool))))
+       (lambda (bool) (tok:bool loc bool))))
 
     ; String
     ((str:string=? first-char "\"")
      (lex-after-consumption
        (consume-string loc input)
-       (lambda (str) (tok:str str))))
+       (lambda (str) (tok:str loc str))))
 
     (else
       (state-new-with-single-error

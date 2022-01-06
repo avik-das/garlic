@@ -27,7 +27,9 @@
 
       ((tok:single-quote? fst)
        (let (((quoted unquoted) (expression-to-tree rst)))
-         (list (cons (tok:id "quote") quoted) unquoted)) )
+         (list
+           (cons (tok:id (tok:get-location fst) "quote") quoted)
+           unquoted)) )
 
       (else (list fst rst)) )))
 
@@ -95,7 +97,9 @@
                ; Synthesize a list of tokens representing a lambda. Notice that
                ; the body, which is a list of trees, is the tail of the lambda
                ; list, as opposed to the last element.
-               (cons (tok:id "lambda") (cons (cdr name) body)) )) )
+               (cons
+                 (tok:id (tok:get-location (car name)) "lambda")
+                 (cons (cdr name) body)) )) )
 
           (else
             (display "\033[1;31m" name "\033[0m") (newline)
