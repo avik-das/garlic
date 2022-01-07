@@ -7,7 +7,7 @@
 
 (require "lexer")
 (require "parser")
-(require "ast")
+(require "static-analyzer")
 (require "evaluator")
 
 (require "compiler_utils" => compiler-utils)
@@ -104,8 +104,9 @@
     (result:new-success input)
     (lambda (input) (lexer:lex filename input))
     (lambda (lexed) (parser:parse lexed))
-    (lambda (parsed)
-      (evaluator:eval-module parsed)
+    (lambda (module) (static-analyzer:analyze-module module))
+    (lambda (module)
+      (evaluator:eval-module module)
       (result:new-success '())) ))
 
 (if (result:is-error? final-result)

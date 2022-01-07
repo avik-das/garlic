@@ -84,6 +84,22 @@
       (new-with-single-error err)
       (new-error (cons err (get-errors result))) ))
 
+(define (combine-results rs)
+  (define (combine r1 rest)
+    (let ((combined-rest (combine-results rest)))
+      (if (is-success? combined-rest)
+          (if (is-success? r1)
+              (new-success (cons (get-value r1) (get-value combined-rest)))
+              r1)
+          (if (is-success? r1)
+              combined-rest
+              (new-error
+                (append (get-errors r1) (get-errors combined-rest))) )) ))
+
+  (if (null? rs)
+      (new-success '())
+      (combine (car rs) (cdr rs))) )
+
 ;; EXPORTS ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (module-export
@@ -103,4 +119,5 @@
   ; Transformations
   transform-success
   pipeline-successes
-  add-error)
+  add-error
+  combine-results)
