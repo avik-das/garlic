@@ -3,8 +3,8 @@
 (define (module statements)
   (cons 'garlic-module statements))
 
-(define (var name)
-  (cons 'var name))
+(define (var loc name)
+  (list 'var loc name))
 
 (define (int val)
   (cons 'int val))
@@ -67,8 +67,13 @@
 ;; GETTERS ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; assumes AST nodes are already validated to be of the correct type
 
+;; Currently, not all AST nodes have a location. This may change in the future
+;; in order to unify the structure of all the nodes, but for now, only call
+;; this function for nodes that have a location.
+(define get-location (compose car cdr))
+
 (define module-get-statements cdr)
-(define var-get-name cdr)
+(define var-get-name (compose car cdr cdr))
 (define int-get-value cdr)
 (define atom-get-name cdr)
 (define bool-get-value cdr)
@@ -123,6 +128,8 @@
   function-call?
 
   ; Getters
+  get-location
+
   module-get-statements
   var-get-name
   int-get-value

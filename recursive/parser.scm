@@ -104,11 +104,17 @@
   (ast:module (map subtree-to-ast tree)))
 
 (define (subtree-to-ast tree)
-  (cond ((tok:id? tree) (ast:var (tok:id-get-name tree)))
-        ((tok:int? tree) (ast:int (tok:int-get-value tree)))
-        ((tok:bool? tree) (ast:bool (tok:bool-get-value tree)))
-        ((tok:str? tree) (ast:str (tok:str-get-value tree)))
-        ((list? tree) (specialize-subtree tree)) ))
+  (cond
+    ((tok:id? tree)
+     (ast:var (tok:get-location tree) (tok:id-get-name tree)))
+
+    ((tok:int? tree) (ast:int (tok:int-get-value tree)))
+
+    ((tok:bool? tree) (ast:bool (tok:bool-get-value tree)))
+
+    ((tok:str? tree) (ast:str (tok:str-get-value tree)))
+
+    ((list? tree) (specialize-subtree tree)) ))
 
 (define (specialize-subtree tree)
   (define (is-type? type name)
