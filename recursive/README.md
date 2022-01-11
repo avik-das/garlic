@@ -32,7 +32,7 @@ The self-hosted implementation is in its early stages. The current version of th
 
 Some of the major work to be done:
 
-- Better error messages. There are many missing features, but one of the worst problems is that these missing features don't result in clear errors. For example, comments are not supported, but including a comment may cause nothing to be evaluated, instead of a message stating that the lexing failed at a particular location. Or, instead of signalling an unreferenced variable, the interpreter will simply segfault.
+- Better error messages. Actually, recent changes to the recursive implementation have yielded clearer error messages than even the Ruby implementation, in certain scenarios. However, more work is required, especially for runtime errors.
 
 - Support more tokens in the lexer:
 
