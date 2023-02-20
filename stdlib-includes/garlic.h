@@ -65,7 +65,7 @@ garlic_value_t garlic_wrap_string(const char *contents);
 
 /* To avoid having to re-allocate a garlic_value_t each time, the wrapped
  * empty string is always available as a constant. */
-garlic_value_t garlic_empty_string;
+extern garlic_value_t garlic_empty_string;
 
 /* Given a value of type garlic_value_t, get back the C string contained
  * within. */
