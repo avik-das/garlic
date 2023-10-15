@@ -614,16 +614,16 @@ module AST
     end
 
     def static_transformed
-      if @children.empty?
+      filtered_children = @children.reject { |child| child.is_a?(Comment) }
+
+      if filtered_children.empty?
         # The only time an empty list is valid is when it's quoted, i.e. when
         # it represents "nil". If that's the case, it will be handled by
         # "specialized_quoted", not by "static_transformed".
         raise ParseException.new("empty list is invalid without quoting")
       else
-        first = @children.first
+        first = filtered_children.first
         first_is_var = first.is_a?(Var)
-
-        filtered_children = @children.reject { |child| child.is_a?(Comment) }
 
         specialized =
           if first_is_var
@@ -657,18 +657,18 @@ module AST
             when :letrec
               Let.new(:rec, *filtered_children)
             else
-              as_function_call
+              as_function_call(filtered_children)
             end
           else
-            as_function_call
+            as_function_call(filtered_children)
           end
 
         specialized.static_transformed
       end
     end
 
-    def as_function_call
-      FunctionCall.new(*@children)
+    def as_function_call(filtered_children)
+      FunctionCall.new(*filtered_children)
     end
 
     def specialized_quoted
@@ -1213,20 +1213,22 @@ module AST
               "Let binding must be a list, got: (#{binding})")
           end
 
-          unless binding.children.size == 2
+          children = binding.children.reject { |c| c.is_a?(Comment) }
+
+          unless children.size == 2
             raise ParseException.new(
               "Let binding must have two children, got " +
-              "#{binding.children.size}: (#{binding.children.join(" ")})")
+              "#{children.size}: (#{children.join(" ")})")
           end
 
-          unless binding.children[0].can_be_used_as_binding?
+          unless children[0].can_be_used_as_binding?
             raise ParseException.new(
               "Let binding must a valid left-hand value, got: " +
-              "#{binding.children[0]}")
+              "#{children[0]}")
           end
 
-          name = binding.children[0]
-          value = binding.children[1].static_transformed
+          name = children[0]
+          value = children[1].static_transformed
           LetBinding.new(name, value)
         }
 
