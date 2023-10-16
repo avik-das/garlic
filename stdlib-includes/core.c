@@ -264,6 +264,36 @@ garlic_value_t greater_than(garlic_value_t a, garlic_value_t b) {
         : FALSE_VALUE;
 }
 
+// The following bitwise operators are based on SRFI 151. See
+// https://srfi.schemers.org/srfi-151/srfi-151.html
+//
+// If any listed operators have not been implemented, it's because they haven't
+// been needed for practical purposes yet.
+
+garlic_value_t bitwise_and(garlic_value_t a, garlic_value_t b) {
+    if (garlic_get_type(a) != GARLIC_TYPE_FIXNUM ||
+            garlic_get_type(b) != GARLIC_TYPE_FIXNUM) {
+        error_and_exit("ERROR: bitwise-and can only be applied to integers");
+    }
+
+    return int_to_garlicval(garlicval_to_int(a) & garlicval_to_int(b));
+}
+
+garlic_value_t arithmetic_shift(garlic_value_t a, garlic_value_t b) {
+    if (garlic_get_type(a) != GARLIC_TYPE_FIXNUM ||
+            garlic_get_type(b) != GARLIC_TYPE_FIXNUM) {
+        error_and_exit(
+                "ERROR: arithmetic_shift can only be applied to integers");
+    }
+
+    int64_t inta = garlicval_to_int(a);
+    int64_t intb = garlicval_to_int(b);
+
+         if (intb > 0) { return int_to_garlicval(inta <<  intb); }
+    else if (intb < 0) { return int_to_garlicval(inta >> -intb); }
+    else               { return a; }
+}
+
 void display_single(garlic_value_t val);
 
 void display_cons_inner(garlic_value_t cons) {
@@ -345,6 +375,9 @@ garlic_native_export_t core_exports[] = {
 
     {"<", less_than, 2},
     {">", greater_than, 2},
+
+    {"bitwise-and", bitwise_and, 2},
+    {"arithmetic-shift", arithmetic_shift, 2},
 
     {"display", display, 0, 1},
 
