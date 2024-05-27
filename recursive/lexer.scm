@@ -43,6 +43,18 @@
        (tok:single-quote loc)
        (lex-possibly-empty (loc:next-column loc) (str-rest input))) )
 
+    ; Bare hexadecimal integer
+    ((and
+       (str:string=? first-char "0")
+       (or
+         (str:string=? (str:at input 1) "x")
+         (str:string=? (str:at input 1) "X")))
+     (lex-after-consumption
+       (consume-hex-integer
+         (loc:next-column (loc:next-column loc))
+         (str-rest (str-rest input)))
+       (lambda (int) (tok:int loc int))))
+
     ; Bare integer
     ((is-integer? first-char)
      (lex-after-consumption
@@ -180,6 +192,11 @@
 (define integer-characters
   '("0" "1" "2" "3" "4" "5" "6" "7" "8" "9"))
 
+(define hex-integer-characters
+  '("0" "1" "2" "3" "4" "5" "6" "7" "8" "9"
+    "a" "b" "c" "d" "e" "f"
+    "A" "B" "C" "D" "E" "F"))
+
 (define identifier-characters-first
   '("a" "b" "c" "d" "e" "f" "g" "h" "i" "j" "k" "l" "m"
     "n" "o" "p" "q" "r" "s" "t" "u" "v" "w" "x" "y" "z"
@@ -204,6 +221,9 @@
 (define (is-integer? chr)
   (is-char-any-of? chr integer-characters))
 
+(define (is-hex-integer? chr)
+  (is-char-any-of? chr hex-integer-characters))
+
 (define (char-to-int chr)
   (cond ((str:string=? chr "0") 0)
         ((str:string=? chr "1") 1)
@@ -215,6 +235,25 @@
         ((str:string=? chr "7") 7)
         ((str:string=? chr "8") 8)
         ((str:string=? chr "9") 9)
+        (else (error-and-exit "Cannot convert to integer: " chr)) ))
+
+(define (hex-char-to-int chr)
+  (cond ((str:string=? chr "0") 0)
+        ((str:string=? chr "1") 1)
+        ((str:string=? chr "2") 2)
+        ((str:string=? chr "3") 3)
+        ((str:string=? chr "4") 4)
+        ((str:string=? chr "5") 5)
+        ((str:string=? chr "6") 6)
+        ((str:string=? chr "7") 7)
+        ((str:string=? chr "8") 8)
+        ((str:string=? chr "9") 9)
+        ((or (str:string=? chr "a") (str:string=? chr "A")) 10)
+        ((or (str:string=? chr "b") (str:string=? chr "B")) 11)
+        ((or (str:string=? chr "c") (str:string=? chr "C")) 12)
+        ((or (str:string=? chr "d") (str:string=? chr "D")) 13)
+        ((or (str:string=? chr "e") (str:string=? chr "E")) 14)
+        ((or (str:string=? chr "f") (str:string=? chr "F")) 15)
         (else (error-and-exit "Cannot convert to integer: " chr)) ))
 
 (define (is-string-escapable-character? chr)
@@ -294,6 +333,35 @@
           (err:new
             new-loc
             "unexpected character when parsing integer: '" (str:at rest 0) "'")
+          loc
+          input)) ))
+
+;; See documentation for consume-integer. This function works almos the same
+;; way, but parses hexadecimal digits instead of decimal digits.
+(define (consume-hex-integer loc input)
+  (define (helper loc input preceding)
+    (if (str:null? input)
+        (list preceding loc "" 1)
+        (let ((chr (str:at input 0)))
+          (if (is-hex-integer? chr)
+            (let* ((next-loc (loc:next-column loc))
+                   ((int rest-loc rest power)
+                    (helper next-loc (str-rest input) (hex-char-to-int chr)))
+                   (new-power (* power 16)))
+              (list (+ (* preceding new-power) int) rest-loc rest new-power))
+            (list preceding loc input 1))) ))
+
+  (let (((int new-loc rest _) (helper loc input 0)))
+    (if (or (str:null? rest)
+            (is-delimeter? (str:at rest 0)))
+        (state-new-success int new-loc rest)
+
+        (state-new-with-single-error
+          (err:new
+            new-loc
+            "unexpected character when parsing hexadecimal integer: '"
+            (str:at rest 0)
+            "'")
           loc
           input)) ))
 
