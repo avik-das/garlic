@@ -2,6 +2,67 @@
 ;; The scope of this module is reduced by assuming system configuration such as
 ;; x86-64 little-endian systems.
 
+(require string => str)
+
+;; UTILITIES ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(define (ascii-char-to-byte chr)
+  (cond
+    ((str:string=? chr ".")  46)
+    ((str:string=? chr "A")  65)
+    ((str:string=? chr "B")  66)
+    ((str:string=? chr "C")  67)
+    ((str:string=? chr "D")  68)
+    ((str:string=? chr "E")  69)
+    ((str:string=? chr "F")  70)
+    ((str:string=? chr "G")  71)
+    ((str:string=? chr "H")  72)
+    ((str:string=? chr "I")  73)
+    ((str:string=? chr "J")  74)
+    ((str:string=? chr "K")  75)
+    ((str:string=? chr "L")  76)
+    ((str:string=? chr "M")  77)
+    ((str:string=? chr "N")  78)
+    ((str:string=? chr "O")  79)
+    ((str:string=? chr "P")  80)
+    ((str:string=? chr "Q")  81)
+    ((str:string=? chr "R")  82)
+    ((str:string=? chr "S")  83)
+    ((str:string=? chr "T")  84)
+    ((str:string=? chr "U")  85)
+    ((str:string=? chr "V")  86)
+    ((str:string=? chr "W")  87)
+    ((str:string=? chr "X")  88)
+    ((str:string=? chr "Y")  89)
+    ((str:string=? chr "Z")  90)
+    ((str:string=? chr "a")  97)
+    ((str:string=? chr "b")  98)
+    ((str:string=? chr "c")  99)
+    ((str:string=? chr "d") 100)
+    ((str:string=? chr "e") 101)
+    ((str:string=? chr "f") 102)
+    ((str:string=? chr "g") 103)
+    ((str:string=? chr "h") 104)
+    ((str:string=? chr "i") 105)
+    ((str:string=? chr "j") 106)
+    ((str:string=? chr "k") 107)
+    ((str:string=? chr "l") 108)
+    ((str:string=? chr "m") 109)
+    ((str:string=? chr "n") 110)
+    ((str:string=? chr "o") 111)
+    ((str:string=? chr "p") 112)
+    ((str:string=? chr "q") 113)
+    ((str:string=? chr "r") 114)
+    ((str:string=? chr "s") 115)
+    ((str:string=? chr "t") 116)
+    ((str:string=? chr "u") 117)
+    ((str:string=? chr "v") 118)
+    ((str:string=? chr "w") 119)
+    ((str:string=? chr "x") 120)
+    ((str:string=? chr "y") 121)
+    ((str:string=? chr "z") 122)
+    (else (error-and-exit "Cannot convert ASCII character to byte: " chr)) ))
+
 ;; CONSTRUCTORS ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define (empty-static-executable)
@@ -114,7 +175,11 @@
 
 ;; TODO - document
 (define (emit-as-bytes elf)
-  (construct-header elf))
+  (let* ((shstrtab (construct-shstrtab elf))
+         (header (construct-header elf)))
+    (append
+      header
+      (shstrtab 'bytes '()))) )
 
 ; TODO - there are two approaches to constructing the header:
 ;
@@ -133,7 +198,7 @@
       0x00 0x00 ; "None" OS/ABI, equiv. to UNIX - System-V, default version
       0x00 0x00 0x00 0x00 0x00 0x00 0x00 ; Padding until 16 bytes
 
-      0x02 0x00 ; Static executable -- TODO: should depend on type of builder
+      0x02 0x00 ; Static executable
       0x3e 0x00 ; AMD x86-64
       0x01 0x00 0x00 0x00) ; Current file version
 
@@ -160,6 +225,67 @@
 
     ; TODO: 2 bytes -- section name string table index
     (list 0xfd 0xfd) ))
+
+(define (construct-shstrtab elf)
+  ; TODO - depending on how the stubs are represented in the end, this approach
+  ;   may need refinement. The assumption here is there is a one-to-one
+  ;   correspondance between stubs and sections, not that multiple stubs may
+  ;   make up a single section.
+  (define (stub->header-name stub)
+    (let ((type (stub->type stub)))
+      (cond
+        ((= type 'stub-text) (cons 'text ".text"))
+        (else '())) ))
+
+  (define (stubs->header-names stubs)
+    (filter
+      (lambda (name) (not (null? name)))
+      (map stub->header-name stubs)))
+
+  (define (ascii-string-to-bytes str)
+    (if (str:null? str)
+      '(0x00)
+      (cons
+        (ascii-char-to-byte (str:at str 0))
+        (ascii-string-to-bytes (str:string-tail str 1))) ))
+
+  (define (ascii-string-list-to-bytes strings)
+    (if (null? strings)
+      '()
+      (append
+        (ascii-string-to-bytes (car strings))
+        (ascii-string-list-to-bytes (cdr strings))) ))
+
+  (define (lookup-table-instance name-and-bytes-pairs)
+    (define (bytes-from-lookup-table pairs)
+      (if (null? pairs)
+        '()
+        (append (cdr (car pairs)) (bytes-from-lookup-table (cdr pairs))) ))
+
+    (lambda (method args)
+      (cond
+        ((= method 'offset-for-name) 0) ; TODO: implement
+        ((= method 'bytes) (bytes-from-lookup-table name-and-bytes-pairs))
+        (else
+          (error-and-exit
+            "Unknown method for shstrtab lookup table: "
+            method)) )))
+
+  (let*
+    ((header-names (stubs->header-names (elf->stubs elf)))
+     (header-names-with-added-strings
+       (append
+         (list (cons 'empty "")) ; the table must start with an empty string
+         header-names
+         (list (cons 'shstrtab ".shstrtab")))) ; shstrtab is itself a section!
+     (lookup-table
+       (map
+         (lambda (entry-with-string)
+           (cons
+             (car entry-with-string)
+             (ascii-string-to-bytes (cdr entry-with-string))))
+         header-names-with-added-strings) ))
+    (lookup-table-instance lookup-table) ))
 
 ;; EXPORTS ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
