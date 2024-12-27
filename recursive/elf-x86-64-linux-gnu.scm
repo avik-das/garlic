@@ -73,6 +73,15 @@
 
 ;; BUILDER FUNCTIONS ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(define (add-stubs elf stubs-to-add)
+  (let* ((existing-stubs (elf->stubs elf))
+         (updated-stubs
+           (append existing-stubs stubs-to-add)))
+    (new-elf updated-stubs)))
+
+(define (add-stub elf stub-to-add)
+  (add-stubs elf (list stub-to-add)))
+
 ;; Add the given machine code (represented as an opaque list of bytes) into the
 ;; ELF file as the main code that will be executed when the ELF file is run.
 ;; This entails:
@@ -91,16 +100,19 @@
 ;; @param code-bytes - the list of bytes comprising the code
 ;; @return the updated ELF file structure
 (define (add-executable-code elf code-bytes)
-  (let* ((stubs (elf->stubs elf))
-         (updated-stubs
-           (append
-             stubs
-             (list
-               (new-stub-text code-bytes)
-               ; TODO - stub for section header
-               ; TODO - stub for program header
-               ))) )
-    (new-elf updated-stubs)))
+  (add-stubs
+    elf
+    (list
+      (new-stub-text code-bytes)
+      (new-stub-section-header-text (length code-bytes))
+      ; TODO - stub for program header
+      )) )
+
+;; CONSTANTS ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(define SECTION_TYPE_PROGBITS 0x01)
+(define SECTION_TYPE_STRTAB 0x03)
+(define ADDRESS_ALIGNMENT 0x1000)
 
 ;; INTERNAL DATA STRUCTURES ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -110,6 +122,36 @@
 
 (define (new-stub-text code-bytes)
   (list 'stub-text code-bytes))
+
+(define (new-stub-section-header-text size-in-bytes)
+  ; TODO: remove magic numbers in favor of constants
+  (list
+    'stub-section-header
+    'text
+    SECTION_TYPE_PROGBITS
+    0x06 ; Allocatable + executable
+    'placeholder-address
+    'placeholder-offset
+    size-in-bytes ; Section size
+    0x00 ; Link, none because of static binary
+    0x00 ; No extra information
+    ADDRESS_ALIGNMENT
+    0x00)) ; Text section is not a table, no entry size
+
+(define (new-stub-section-header-shstrtab shstrtab)
+  ; TODO: remove magic numbers in favor of constants
+  (list
+    'stub-section-header
+    'shstrtab
+    SECTION_TYPE_STRTAB
+    0x00 ; No flags
+    0x00 ; Address and offset doesn't apply to string tables
+    'placeholder-offset
+    (shstrtab 'size-in-bytes '()) ; Section size
+    0x00 ; Link, none because of static binary
+    0x00 ; No extra information
+    0x00 ; No address alignment
+    0x00)) ; Text section is not a table, no entry size
 
 ; (define elf->sections (compose cdr car))
 ; (define elf->program-headers (compose cdr cdr car))
@@ -141,7 +183,7 @@
       (cons
         (bitwise-and reduced-int 0xff)
         (convert-remaining-bytes
-          (arithmetic-shift reduced-int -2)
+          (arithmetic-shift reduced-int -8)
           (- num-bytes-left 1)) ) ))
 
   (convert-remaining-bytes int pad-to-total-bytes))
@@ -176,9 +218,14 @@
 ;; TODO - document
 (define (emit-as-bytes elf)
   (let* ((shstrtab (construct-shstrtab elf))
+         (elf (add-stub elf (new-stub-section-header-shstrtab shstrtab)))
+         (section-header-table (construct-section-header-table elf shstrtab))
          (header (construct-header elf)))
+    ; Useful for debugging
+    ; (display elf) (newline)
     (append
       header
+      section-header-table
       (shstrtab 'bytes '()))) )
 
 ; TODO - there are two approaches to constructing the header:
@@ -257,19 +304,44 @@
         (ascii-string-list-to-bytes (cdr strings))) ))
 
   (define (lookup-table-instance name-and-bytes-pairs)
+    (define (offset-from-lookup-table pairs offset-so-far name)
+      (cond
+        ((null? pairs)
+         (error-and-exit
+           "Could not find section header name in table: "
+           name))
+
+        ((= (car (car pairs)) name) offset-so-far)
+
+        (else
+          (offset-from-lookup-table
+            (cdr pairs)
+            (+ offset-so-far (length (cdr (car pairs))))
+            name)) ))
+
     (define (bytes-from-lookup-table pairs)
       (if (null? pairs)
         '()
         (append (cdr (car pairs)) (bytes-from-lookup-table (cdr pairs))) ))
 
-    (lambda (method args)
+    (define (self method args)
       (cond
-        ((= method 'offset-for-name) 0) ; TODO: implement
+        ((= method 'offset-for-name)
+         (offset-from-lookup-table
+           name-and-bytes-pairs
+           0
+           (car args)))
+
         ((= method 'bytes) (bytes-from-lookup-table name-and-bytes-pairs))
+
+        ((= method 'size-in-bytes) (length (self 'bytes '())))
+
         (else
           (error-and-exit
             "Unknown method for shstrtab lookup table: "
-            method)) )))
+            method)) ))
+
+    self)
 
   (let*
     ((header-names (stubs->header-names (elf->stubs elf)))
@@ -286,6 +358,48 @@
              (ascii-string-to-bytes (cdr entry-with-string))))
          header-names-with-added-strings) ))
     (lookup-table-instance lookup-table) ))
+
+(define (construct-section-header-table elf shstrtab)
+  (define (section-header-stub->bytes stub)
+    (let* (((stub-type
+              section-type
+              section-type-bits
+              flags
+              address
+              offset
+              size
+              link
+              info
+              alignment
+              entry-size)
+            stub)
+
+           (offset-in-shstrtab (shstrtab 'offset-for-name (list section-type))))
+      (append
+        (int->little-endian offset-in-shstrtab 4)
+        (int->little-endian section-type-bits 4)
+        (int->little-endian flags 8)
+        '(0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00) ; TODO: address - may need resolution
+        '(0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00) ; TODO: offset - may need resolution
+        (int->little-endian size 8)
+        (int->little-endian link 4)
+        (int->little-endian info 4)
+        (int->little-endian alignment 8)
+        (int->little-endian entry-size 8)) ))
+
+  (define (stub->section-header-entry-bytes stub)
+    (if (not (= (stub->type stub) 'stub-section-header))
+      '()
+      (section-header-stub->bytes stub)))
+
+  (define (process-stubs stubs)
+    (if (null? stubs)
+      '()
+      (append
+        (stub->section-header-entry-bytes (car stubs))
+        (process-stubs (cdr stubs))) ) )
+
+  (process-stubs (elf->stubs elf)) )
 
 ;; EXPORTS ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -314,6 +428,5 @@
 ((compose
    compiler_temp:print-bytes
    (lambda (e) (emit-as-bytes e))
-   ; (lambda (e) (display e) (newline))
    (lambda (e) (add-executable-code e test-code)))
  (empty-static-executable))

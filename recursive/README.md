@@ -20,6 +20,15 @@ make
 ./garlic test.scm
 ```
 
+I'm also working on a small library for generating ELF files. While I'm developing the library, the module for the library is itself a program that generates a static, hard-coded ELF file. To run that program:
+
+```sh
+# From inside the "recursive" directory
+
+../garlic -o elf-test elf-x86-64-linux-gnu.scm
+./elf-test  # Currently prints out the bytes being generated
+```
+
 Why?
 ----
 
