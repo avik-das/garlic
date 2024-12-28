@@ -100,18 +100,20 @@
 ;; @param code-bytes - the list of bytes comprising the code
 ;; @return the updated ELF file structure
 (define (add-executable-code elf code-bytes)
-  (add-stubs
-    elf
-    (list
-      (new-stub-text code-bytes)
-      (new-stub-section-header-text (length code-bytes))
-      ; TODO - stub for program header
-      )) )
+  (let ((code-length (length code-bytes)))
+    (add-stubs
+      elf
+      (list
+        (new-stub-text code-bytes)
+        (new-stub-section-header-text code-length)
+        (new-stub-program-header-loadable code-length))) ))
 
 ;; CONSTANTS ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define SECTION_TYPE_PROGBITS 0x01)
 (define SECTION_TYPE_STRTAB 0x03)
+
+(define SEGMENT_TYPE_LOADABLE 0x01)
 (define ADDRESS_ALIGNMENT 0x1000)
 
 ;; INTERNAL DATA STRUCTURES ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -139,7 +141,6 @@
     0x00)) ; Text section is not a table, no entry size
 
 (define (new-stub-section-header-shstrtab shstrtab)
-  ; TODO: remove magic numbers in favor of constants
   (list
     'stub-section-header
     'shstrtab
@@ -152,6 +153,15 @@
     0x00 ; No extra information
     0x00 ; No address alignment
     0x00)) ; Text section is not a table, no entry size
+
+(define (new-stub-program-header-loadable size-in-bytes)
+  ; TODO: remove magic numbers in favor of constants
+  (list
+    'stub-program-header
+    SEGMENT_TYPE_LOADABLE
+    0x05 ; flags: readable + executable
+    size-in-bytes
+    ADDRESS_ALIGNMENT))
 
 ; (define elf->sections (compose cdr car))
 ; (define elf->program-headers (compose cdr cdr car))
@@ -205,7 +215,7 @@
 (define (num-program-headers elf)
   (define (num-program-headers-for-stub stub)
     (let ((type (stub->type stub)))
-      (cond ((= type 'stub-text) 1)
+      (cond ((= type 'stub-program-header) 1)
             (else 0)) ))
 
   ((compose
@@ -220,12 +230,16 @@
   (let* ((shstrtab (construct-shstrtab elf))
          (elf (add-stub elf (new-stub-section-header-shstrtab shstrtab)))
          (section-header-table (construct-section-header-table elf shstrtab))
+         (program-header-table (construct-program-header-table elf))
+         (remaining-sections (construct-non-header-sections elf))
          (header (construct-header elf)))
     ; Useful for debugging
     ; (display elf) (newline)
     (append
       header
       section-header-table
+      program-header-table
+      remaining-sections
       (shstrtab 'bytes '()))) )
 
 ; TODO - there are two approaches to constructing the header:
@@ -397,6 +411,71 @@
       '()
       (append
         (stub->section-header-entry-bytes (car stubs))
+        (process-stubs (cdr stubs))) ) )
+
+  (process-stubs (elf->stubs elf)) )
+
+(define (construct-program-header-table elf)
+  (define (program-header-stub->bytes stub)
+    (let (((stub-type
+             segment-type-bits
+             flags
+             size
+             alignment)
+           stub))
+      (append
+        (int->little-endian segment-type-bits 4)
+        (int->little-endian flags 4)
+        '(0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00) ; TODO: offset - may need resolution
+        '(0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00) ; TODO: virtual memory address - may need resolution
+        '(0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00) ; TODO: physical memory address - may need resolution
+        (int->little-endian size 8) ; segment size in file
+        (int->little-endian size 8) ; segment size in memory (no compression)
+        (int->little-endian alignment 8)) ))
+
+  (define (stub->program-header-entry-bytes stub)
+    (if (not (= (stub->type stub) 'stub-program-header))
+      '()
+      (program-header-stub->bytes stub)))
+
+  (define (process-stubs stubs)
+    (if (null? stubs)
+      '()
+      (append
+        (stub->program-header-entry-bytes (car stubs))
+        (process-stubs (cdr stubs))) ) )
+
+  (process-stubs (elf->stubs elf)) )
+
+(define (construct-non-header-sections elf)
+  (define (program-header-stub->bytes stub)
+    (let (((stub-type
+             segment-type-bits
+             flags
+             size
+             alignment)
+           stub))
+      (append
+        (int->little-endian segment-type-bits 4)
+        (int->little-endian flags 4)
+        '(0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00) ; TODO: offset - may need resolution
+        '(0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00) ; TODO: virtual memory address - may need resolution
+        '(0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00) ; TODO: physical memory address - may need resolution
+        (int->little-endian size 8) ; segment size in file
+        (int->little-endian size 8) ; segment size in memory (no compression)
+        (int->little-endian alignment 8)) ))
+
+  (define (stub->bytes stub)
+    (let ((stub-type (stub->type stub)))
+      (cond
+        ((= stub-type 'stub-text) (car (cdr stub)))
+        (else '()) )))
+
+  (define (process-stubs stubs)
+    (if (null? stubs)
+      '()
+      (append
+        (stub->bytes (car stubs))
         (process-stubs (cdr stubs))) ) )
 
   (process-stubs (elf->stubs elf)) )
