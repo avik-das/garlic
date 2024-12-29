@@ -110,15 +110,15 @@
 
 ;; CONSTANTS ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(define ELF_HEADER_SIZE 0x40)
-(define SECTION_HEADER_SIZE 0x40)
-(define PROGRAM_HEADER_SIZE 0x38)
+(define ELF-HEADER-SIZE 0x40)
+(define SECTION-HEADER-SIZE 0x40)
+(define PROGRAM-HEADER-SIZE 0x38)
 
-(define SECTION_TYPE_PROGBITS 0x01)
-(define SECTION_TYPE_STRTAB 0x03)
+(define SECTION-TYPE-PROGBITS 0x01)
+(define SECTION-TYPE-STRTAB 0x03)
 
-(define SEGMENT_TYPE_LOADABLE 0x01)
-(define ADDRESS_ALIGNMENT 0x1000)
+(define SEGMENT-TYPE-LOADABLE 0x01)
+(define ADDRESS-ALIGNMENT 0x1000)
 
 ;; INTERNAL DATA STRUCTURES ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -135,21 +135,21 @@
   (list
     'stub-section-header
     'text
-    SECTION_TYPE_PROGBITS
+    SECTION-TYPE-PROGBITS
     0x06 ; Allocatable + executable
     'placeholder-address
     'placeholder-offset
     size-in-bytes ; Section size
     0x00 ; Link, none because of static binary
     0x00 ; No extra information
-    ADDRESS_ALIGNMENT
+    ADDRESS-ALIGNMENT
     0x00)) ; Text section is not a table, no entry size
 
 (define (new-stub-section-header-shstrtab shstrtab)
   (list
     'stub-section-header
     'shstrtab
-    SECTION_TYPE_STRTAB
+    SECTION-TYPE-STRTAB
     0x00 ; No flags
     0x00 ; Address and offset doesn't apply to string tables
     'placeholder-offset
@@ -163,10 +163,10 @@
   ; TODO: remove magic numbers in favor of constants
   (list
     'stub-program-header
-    SEGMENT_TYPE_LOADABLE
+    SEGMENT-TYPE-LOADABLE
     0x05 ; flags: readable + executable
     size-in-bytes
-    ADDRESS_ALIGNMENT))
+    ADDRESS-ALIGNMENT))
 
 (define (laid-out-stub type data offset size)
   (list
@@ -181,25 +181,6 @@
 (define laid-out-stub->offset (compose car cdr cdr))
 (define laid-out-stub->size (compose car cdr cdr cdr))
 (define laid-out-stub->offset-after-section (compose car cdr cdr cdr cdr))
-
-; (define elf->sections (compose cdr car))
-; (define elf->program-headers (compose cdr cdr car))
-; 
-; (define (located-byte-span byte-span offset)
-;   (cons byte-span offset))
-; (define located-byte-span->bytes car)
-; (define located-byte-span->offset cdr)
-; (define located-byte-span->length (compose located-byte-span->bytes length))
-; (define (located-byte-span->offset-after span)
-;   (+
-;     (located-byte-span->offset span)
-;     (located-byte-span->length span)))
-; 
-; (define section-type car)
-; 
-; (define (text-section code-bytes)
-;   (cons 'text code-bytes))
-; (define text-section->code-bytes cdr)
 
 ;; STUBS -> ELF DATA STRUCTURES ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -308,7 +289,7 @@
       (int->little-endian (laid-out-stub->offset section-headers-stub) 8)
 
       (list 0x00 0x00 0x00 0x00) ; Processsor-specific flags, none defined
-      (int->little-endian ELF_HEADER_SIZE 2) ; ELF header size
+      (int->little-endian ELF-HEADER-SIZE 2) ; ELF header size
 
       (list 0x38 0x00) ; Program header entry size, 56 bytes for 64-bit
                        ; architectures
@@ -420,8 +401,8 @@
     (laid-out-stub
       'stub-section-headers
       headers
-      ELF_HEADER_SIZE
-      (* SECTION_HEADER_SIZE (length headers))) ))
+      ELF-HEADER-SIZE
+      (* SECTION-HEADER-SIZE (length headers))) ))
 
   (define (gather-program-headers stubs last-stub)
     (let ((headers
@@ -432,7 +413,7 @@
         'stub-program-headers
         headers
         (laid-out-stub->offset-after-section last-stub)
-        (* PROGRAM_HEADER_SIZE (length headers))) ))
+        (* PROGRAM-HEADER-SIZE (length headers))) ))
 
   (define (gather-non-header-sections stubs last-stub)
     (define (size-of-stub stub)
@@ -494,8 +475,8 @@
         (int->little-endian offset-in-shstrtab 4)
         (int->little-endian section-type-bits 4)
         (int->little-endian flags 8)
-        '(0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00) ; TODO: address - may need resolution
-        '(0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00) ; TODO: offset - may need resolution
+        '(0xfa 0xfa 0xfa 0xfa 0xfa 0xfa 0xfa 0xfa) ; TODO: address - may need resolution
+        '(0xfb 0xfb 0xfb 0xfb 0xfb 0xfb 0xfb 0xfb) ; TODO: offset - may need resolution
         (int->little-endian size 8)
         (int->little-endian link 4)
         (int->little-endian info 4)
@@ -527,9 +508,9 @@
       (append
         (int->little-endian segment-type-bits 4)
         (int->little-endian flags 4)
-        '(0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00) ; TODO: offset - may need resolution
-        '(0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00) ; TODO: virtual memory address - may need resolution
-        '(0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00) ; TODO: physical memory address - may need resolution
+        '(0xfa 0xfa 0xfa 0xfa 0xfa 0xfa 0xfa 0xfa) ; TODO: offset - may need resolution
+        '(0xfb 0xfb 0xfb 0xfb 0xfb 0xfb 0xfb 0xfb) ; TODO: virtual memory address - may need resolution
+        '(0xfc 0xfc 0xfc 0xfc 0xfc 0xfc 0xfc 0xfc) ; TODO: physical memory address - may need resolution
         (int->little-endian size 8) ; segment size in file
         (int->little-endian size 8) ; segment size in memory (no compression)
         (int->little-endian alignment 8)) ))
@@ -549,23 +530,6 @@
   (process-stubs (elf->stubs elf)) )
 
 (define (construct-non-header-sections elf)
-  (define (program-header-stub->bytes stub)
-    (let (((stub-type
-             segment-type-bits
-             flags
-             size
-             alignment)
-           stub))
-      (append
-        (int->little-endian segment-type-bits 4)
-        (int->little-endian flags 4)
-        '(0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00) ; TODO: offset - may need resolution
-        '(0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00) ; TODO: virtual memory address - may need resolution
-        '(0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00) ; TODO: physical memory address - may need resolution
-        (int->little-endian size 8) ; segment size in file
-        (int->little-endian size 8) ; segment size in memory (no compression)
-        (int->little-endian alignment 8)) ))
-
   (define (stub->bytes stub)
     (let ((stub-type (stub->type stub)))
       (cond
