@@ -59,6 +59,13 @@ garlic_value_t listp(garlic_value_t value) {
         FALSE_VALUE;
 }
 
+garlic_value_t numberp(garlic_value_t value) {
+    enum garlic_value_type type = garlic_get_type(value);
+    return (type == GARLIC_TYPE_FIXNUM || type == GARLIC_TYPE_DOUBLE) ?
+        TRUE_VALUE :
+        FALSE_VALUE;
+}
+
 garlic_value_t sum(garlic_value_t vals) {
     int64_t intsum = 0;
     double dblsum = 0.0;
@@ -363,6 +370,7 @@ garlic_native_export_t core_exports[] = {
     {"null?", nullp, 1},
     {"symbol?", symbolp, 1},
     {"list?", listp, 1},
+    {"number?", numberp, 1},
 
     {"cons", garlic_make_cons, 2},
     {"car", garlic_car, 1},
