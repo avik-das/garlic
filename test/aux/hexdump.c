@@ -1,9 +1,3 @@
-/**
- * A set of utilities for the recursive compiler that are just here for
- * quick-and-dirty testing. Will be removed even faster than the utilities in
- * compiler_utils.c.
- */
-
 #include <garlic.h>
 
 #include <stdio.h>
@@ -33,7 +27,7 @@ garlic_value_t print_bytes(garlic_value_t bytes) {
     return NIL_VALUE;
 }
 
-garlic_native_export_t compiler_temp_exports[] = {
+garlic_native_export_t hexdump_exports[] = {
     {"print-bytes", print_bytes, 1},
     0
 };
