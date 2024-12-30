@@ -103,9 +103,6 @@
 ;; @param code-bytes - the list of bytes comprising the code
 ;; @return the updated ELF file structure
 (define (add-executable-code elf id code-bytes)
-  ; TODO:
-  ;   - Support marking one text section as the entrypoint (will be used to
-  ;     determine entrypoint address in ELF header)
   (let ((code-length (length code-bytes)))
     (add-stubs
       elf
@@ -283,7 +280,12 @@
   (let ((section-headers-stub
           (find-laid-out-stub-of-type laid-out-stubs 'stub-section-headers))
         (program-headers-stub
-          (find-laid-out-stub-of-type laid-out-stubs 'stub-program-headers)))
+          (find-laid-out-stub-of-type laid-out-stubs 'stub-program-headers))
+
+        (entrypoint
+          (file-offset->executable-memory-address
+            (laid-out-stub->offset
+              (laid-out-stub-with-id laid-out-stubs 'main)))) )
     (append
       (list
         0x7f 0x45 0x4c 0x46 ; Magic number
@@ -297,8 +299,7 @@
         0x3e 0x00 ; AMD x86-64
         0x01 0x00 0x00 0x00) ; Current file version
 
-      ; TODO: 8 bytes -- entry point
-      (list 0xff 0xff 0xff 0xff 0xff 0xff 0xff 0xff)
+      (int->little-endian entrypoint 8) ; Entrypoint
 
       ; Program header table start
       (int->little-endian (laid-out-stub->offset program-headers-stub) 8)
