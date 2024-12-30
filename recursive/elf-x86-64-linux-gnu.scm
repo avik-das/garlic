@@ -97,16 +97,22 @@
 ;; ELF file.
 ;;
 ;; @param elf - the in-progress ELF file structure
+;; @param id - a unique ID used for this block of code. This ID won't be
+;;             preserved in the output ELF file, but it is used internally
+;;             during compilation to correlated related sections together
 ;; @param code-bytes - the list of bytes comprising the code
 ;; @return the updated ELF file structure
-(define (add-executable-code elf code-bytes)
+(define (add-executable-code elf id code-bytes)
+  ; TODO:
+  ;   - Support marking one text section as the entrypoint (will be used to
+  ;     determine entrypoint address in ELF header)
   (let ((code-length (length code-bytes)))
     (add-stubs
       elf
       (list
-        (new-stub-text code-bytes)
-        (new-stub-section-header-text code-length)
-        (new-stub-program-header-loadable code-length))) ))
+        (new-stub-text id code-bytes)
+        (new-stub-section-header-text id code-length)
+        (new-stub-program-header-loadable id code-length))) ))
 
 ;; CONSTANTS ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -119,22 +125,28 @@
 
 (define SEGMENT-TYPE-LOADABLE 0x01)
 (define ADDRESS-ALIGNMENT 0x1000)
+(define EXECUTABLE-MEMORY-BASE-ADDRESS 0x400000)
 
 ;; INTERNAL DATA STRUCTURES ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define elf->stubs (compose car cdr))
 
 (define stub->type car)
-(define section-header-stub->type (compose car cdr))
+(define stub->id (compose car cdr))
+(define text-stub->code-bytes (compose car cdr cdr))
+(define section-header-stub->type (compose car cdr cdr))
+(define header-stub->associated-section-id (compose car cdr cdr cdr))
 
-(define (new-stub-text code-bytes)
-  (list 'stub-text code-bytes))
+(define (new-stub-text id code-bytes)
+  (list 'stub-text id code-bytes))
 
-(define (new-stub-section-header-text size-in-bytes)
+(define (new-stub-section-header-text associated-section-id size-in-bytes)
   ; TODO: remove magic numbers in favor of constants
   (list
     'stub-section-header
+    'no-id
     'text
+    associated-section-id
     SECTION-TYPE-PROGBITS
     0x06 ; Allocatable + executable
     'placeholder-address
@@ -148,10 +160,12 @@
 (define (new-stub-section-header-shstrtab shstrtab)
   (list
     'stub-section-header
+    'no-id
+    'shstrtab
     'shstrtab
     SECTION-TYPE-STRTAB
     0x00 ; No flags
-    0x00 ; Address and offset doesn't apply to string tables
+    0x00 ; Address doesn't apply to string tables
     'placeholder-offset
     (shstrtab 'size-in-bytes '()) ; Section size
     0x00 ; Link, none because of static binary
@@ -159,28 +173,38 @@
     0x00 ; No address alignment
     0x00)) ; Text section is not a table, no entry size
 
-(define (new-stub-program-header-loadable size-in-bytes)
+(define (new-stub-program-header-loadable associated-section-id size-in-bytes)
   ; TODO: remove magic numbers in favor of constants
   (list
     'stub-program-header
+    'no-id
+    associated-section-id
     SEGMENT-TYPE-LOADABLE
     0x05 ; flags: readable + executable
     size-in-bytes
     ADDRESS-ALIGNMENT))
 
-(define (laid-out-stub type data offset size)
+(define (laid-out-stub type id data offset size)
   (list
     type
+    id
     data
     offset
     size
     (+ offset size)))
 
 (define laid-out-stub->type car)
-(define laid-out-stub->data (compose car cdr))
-(define laid-out-stub->offset (compose car cdr cdr))
-(define laid-out-stub->size (compose car cdr cdr cdr))
-(define laid-out-stub->offset-after-section (compose car cdr cdr cdr cdr))
+(define laid-out-stub->id (compose car cdr))
+(define laid-out-stub->data (compose car cdr cdr))
+(define laid-out-stub->offset (compose car cdr cdr cdr))
+(define laid-out-stub->size (compose car cdr cdr cdr cdr))
+(define laid-out-stub->offset-after-section (compose car cdr cdr cdr cdr cdr))
+
+(define (find-laid-out-stub-of-type laid-out-stubs type)
+  (cond
+    ((null? laid-out-stubs) (error-and-exit "No stub found of type: " type))
+    ((= (laid-out-stub->type (car laid-out-stubs)) type) (car laid-out-stubs))
+    (else (find-laid-out-stub-of-type (cdr laid-out-stubs) type)) ))
 
 ;; STUBS -> ELF DATA STRUCTURES ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -223,6 +247,9 @@
      (lambda (stubs) (map num-program-headers-for-stub stubs))
      elf->stubs) elf))
 
+(define (file-offset->executable-memory-address file-offset)
+  (+ EXECUTABLE-MEMORY-BASE-ADDRESS file-offset))
+
 ;; OUTPUT ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; TODO - document
@@ -231,7 +258,7 @@
          (elf (add-stub elf (new-stub-section-header-shstrtab shstrtab)))
          (laid-out-stubs (lay-out-stubs elf))
          (section-header-table (construct-section-header-table elf shstrtab))
-         (program-header-table (construct-program-header-table elf))
+         (program-header-table (construct-program-header-table laid-out-stubs))
          (remaining-sections (construct-non-header-sections elf))
          (header (construct-header laid-out-stubs)))
     ; Useful for debugging
@@ -245,12 +272,6 @@
       (shstrtab 'bytes '()))) )
 
 (define (construct-header laid-out-stubs)
-  (define (find-stub-of-type stubs type)
-    (cond
-      ((null? stubs) (error-and-exit "No stub found of type: " type))
-      ((= (laid-out-stub->type (car stubs)) type) (car stubs))
-      (else (find-stub-of-type (cdr stubs) type)) ))
-
   (define (index-of-section-header section-headers type)
     (define (helper remaining-section-headers index-so-far)
       (cond
@@ -263,9 +284,9 @@
     (helper section-headers 0))
 
   (let ((section-headers-stub
-          (find-stub-of-type laid-out-stubs 'stub-section-headers))
+          (find-laid-out-stub-of-type laid-out-stubs 'stub-section-headers))
         (program-headers-stub
-          (find-stub-of-type laid-out-stubs 'stub-program-headers)))
+          (find-laid-out-stub-of-type laid-out-stubs 'stub-program-headers)))
     (append
       (list
         0x7f 0x45 0x4c 0x46 ; Magic number
@@ -400,6 +421,7 @@
               stubs)))
     (laid-out-stub
       'stub-section-headers
+      'no-id
       headers
       ELF-HEADER-SIZE
       (* SECTION-HEADER-SIZE (length headers))) ))
@@ -411,6 +433,7 @@
               stubs)))
       (laid-out-stub
         'stub-program-headers
+        'no-id
         headers
         (laid-out-stub->offset-after-section last-stub)
         (* PROGRAM-HEADER-SIZE (length headers))) ))
@@ -419,7 +442,7 @@
     (define (size-of-stub stub)
       (let ((stub-type (stub->type stub)))
         (cond
-          ((= stub-type 'stub-text) (length (car (cdr stub))))
+          ((= stub-type 'stub-text) (length (text-stub->code-bytes stub)))
           (else
             (error-and-exit
               "size-of-stub: unknown stub type"
@@ -436,6 +459,7 @@
                  (latest-laid-out-stub
                    (laid-out-stub
                      (stub->type latest-stub)
+                     (stub->id latest-stub)
                      latest-stub
                      (laid-out-stub->offset-after-section last-stub-so-far)
                      (size-of-stub latest-stub))))
@@ -458,7 +482,9 @@
 (define (construct-section-header-table elf shstrtab)
   (define (section-header-stub->bytes stub)
     (let* (((stub-type
+              id
               section-type
+              associated-section-id
               section-type-bits
               flags
               address
@@ -497,43 +523,70 @@
 
   (process-stubs (elf->stubs elf)) )
 
-(define (construct-program-header-table elf)
-  (define (program-header-stub->bytes stub)
-    (let (((stub-type
-             segment-type-bits
-             flags
-             size
-             alignment)
-           stub))
+(define (construct-program-header-table laid-out-stubs)
+  (define (resolve-offset remaining-laid-out-stubs associated-section-id)
+    (cond
+      ((null? remaining-laid-out-stubs)
+       (error-and-exit "Stub with ID not found: " associated-section-id))
+
+      ((= (stub->id (car remaining-laid-out-stubs)) associated-section-id)
+       (laid-out-stub->offset (car remaining-laid-out-stubs)))
+
+      (else
+        (resolve-offset
+          (cdr remaining-laid-out-stubs)
+          associated-section-id)) ))
+
+  (define (program-header-stub->bytes laid-out-stubs stub)
+    (let* (((stub-type
+              id
+              associated-section-id
+              segment-type-bits
+              flags
+              size
+              alignment)
+            stub)
+
+           (associated-section-offset
+             (resolve-offset laid-out-stubs associated-section-id))
+
+           (memory-address
+             (file-offset->executable-memory-address associated-section-offset)))
       (append
         (int->little-endian segment-type-bits 4)
         (int->little-endian flags 4)
-        '(0xfa 0xfa 0xfa 0xfa 0xfa 0xfa 0xfa 0xfa) ; TODO: offset - may need resolution
-        '(0xfb 0xfb 0xfb 0xfb 0xfb 0xfb 0xfb 0xfb) ; TODO: virtual memory address - may need resolution
-        '(0xfc 0xfc 0xfc 0xfc 0xfc 0xfc 0xfc 0xfc) ; TODO: physical memory address - may need resolution
+        (int->little-endian associated-section-offset 8) ; file offset
+        (int->little-endian memory-address 8) ; virtual memory address
+        (int->little-endian memory-address 8) ; physical memory address
         (int->little-endian size 8) ; segment size in file
         (int->little-endian size 8) ; segment size in memory (no compression)
         (int->little-endian alignment 8)) ))
 
-  (define (stub->program-header-entry-bytes stub)
+  (define (stub->program-header-entry-bytes laid-out-stubs stub)
     (if (not (= (stub->type stub) 'stub-program-header))
       '()
-      (program-header-stub->bytes stub)))
+      (program-header-stub->bytes laid-out-stubs stub)))
 
-  (define (process-stubs stubs)
-    (if (null? stubs)
+  (define (process-stubs laid-out-stubs program-header-stubs)
+    (if (null? program-header-stubs)
       '()
       (append
-        (stub->program-header-entry-bytes (car stubs))
-        (process-stubs (cdr stubs))) ) )
+        (stub->program-header-entry-bytes
+          laid-out-stubs
+          (car program-header-stubs))
+        (process-stubs laid-out-stubs (cdr program-header-stubs))) ) )
 
-  (process-stubs (elf->stubs elf)) )
+  (let* ((laid-out-program-headers-stub
+           (find-laid-out-stub-of-type laid-out-stubs 'stub-program-headers))
+         (program-header-stubs
+           (laid-out-stub->data laid-out-program-headers-stub)))
+    (process-stubs laid-out-stubs program-header-stubs) ))
 
 (define (construct-non-header-sections elf)
   (define (stub->bytes stub)
     (let ((stub-type (stub->type stub)))
       (cond
-        ((= stub-type 'stub-text) (car (cdr stub)))
+        ((= stub-type 'stub-text) (text-stub->code-bytes stub))
         (else '()) )))
 
   (define (process-stubs stubs)
@@ -572,5 +625,5 @@
 ((compose
    compiler_temp:print-bytes
    (lambda (e) (emit-as-bytes e))
-   (lambda (e) (add-executable-code e test-code)))
+   (lambda (e) (add-executable-code e 'main test-code)))
  (empty-static-executable))
