@@ -134,6 +134,7 @@
 (define stub->type car)
 (define stub->id (compose car cdr))
 (define text-stub->code-bytes (compose car cdr cdr))
+(define shstrtab-stub->shstrtab (compose car cdr cdr))
 (define section-header-stub->type (compose car cdr cdr))
 (define header-stub->associated-section-id (compose car cdr cdr cdr))
 
@@ -184,6 +185,9 @@
     size-in-bytes
     ADDRESS-ALIGNMENT))
 
+(define (new-stub-shstrtab shstrtab)
+  (list 'stub-shstrtab 'shstrtab shstrtab))
+
 (define (laid-out-stub type id data offset size)
   (list
     type
@@ -205,6 +209,19 @@
     ((null? laid-out-stubs) (error-and-exit "No stub found of type: " type))
     ((= (laid-out-stub->type (car laid-out-stubs)) type) (car laid-out-stubs))
     (else (find-laid-out-stub-of-type (cdr laid-out-stubs) type)) ))
+
+(define (resolve-offset-for-laid-out-stub-with-id remaining-laid-out-stubs id)
+  (cond
+    ((null? remaining-laid-out-stubs)
+     (error-and-exit "Stub with ID not found: " id))
+
+    ((= (stub->id (car remaining-laid-out-stubs)) id)
+     (laid-out-stub->offset (car remaining-laid-out-stubs)))
+
+    (else
+      (resolve-offset-for-laid-out-stub-with-id
+        (cdr remaining-laid-out-stubs)
+        id)) ))
 
 ;; STUBS -> ELF DATA STRUCTURES ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -255,9 +272,15 @@
 ;; TODO - document
 (define (emit-as-bytes elf)
   (let* ((shstrtab (construct-shstrtab elf))
-         (elf (add-stub elf (new-stub-section-header-shstrtab shstrtab)))
+         (elf
+           (add-stubs
+             elf
+             (list
+               (new-stub-section-header-shstrtab shstrtab)
+               (new-stub-shstrtab shstrtab))))
          (laid-out-stubs (lay-out-stubs elf))
-         (section-header-table (construct-section-header-table elf shstrtab))
+         (section-header-table
+           (construct-section-header-table laid-out-stubs shstrtab))
          (program-header-table (construct-program-header-table laid-out-stubs))
          (remaining-sections (construct-non-header-sections elf))
          (header (construct-header laid-out-stubs)))
@@ -268,8 +291,7 @@
       header
       section-header-table
       program-header-table
-      remaining-sections
-      (shstrtab 'bytes '()))) )
+      remaining-sections)) )
 
 (define (construct-header laid-out-stubs)
   (define (index-of-section-header section-headers type)
@@ -443,6 +465,8 @@
       (let ((stub-type (stub->type stub)))
         (cond
           ((= stub-type 'stub-text) (length (text-stub->code-bytes stub)))
+          ((= stub-type 'stub-shstrtab)
+           ((shstrtab-stub->shstrtab stub) 'size-in-bytes))
           (else
             (error-and-exit
               "size-of-stub: unknown stub type"
@@ -479,8 +503,8 @@
         program-headers)
         non-header-sections) ))
 
-(define (construct-section-header-table elf shstrtab)
-  (define (section-header-stub->bytes stub)
+(define (construct-section-header-table laid-out-stubs shstrtab)
+  (define (section-header-stub->bytes laid-out-stubs stub)
     (let* (((stub-type
               id
               section-type
@@ -496,47 +520,45 @@
               entry-size)
             stub)
 
-           (offset-in-shstrtab (shstrtab 'offset-for-name (list section-type))))
+           (offset-in-shstrtab (shstrtab 'offset-for-name (list section-type)))
+
+           (associated-section-offset
+             (resolve-offset-for-laid-out-stub-with-id
+               laid-out-stubs
+               associated-section-id)))
       (append
         (int->little-endian offset-in-shstrtab 4)
         (int->little-endian section-type-bits 4)
         (int->little-endian flags 8)
         '(0xfa 0xfa 0xfa 0xfa 0xfa 0xfa 0xfa 0xfa) ; TODO: address - may need resolution
-        '(0xfb 0xfb 0xfb 0xfb 0xfb 0xfb 0xfb 0xfb) ; TODO: offset - may need resolution
+        (int->little-endian associated-section-offset 8)
         (int->little-endian size 8)
         (int->little-endian link 4)
         (int->little-endian info 4)
         (int->little-endian alignment 8)
         (int->little-endian entry-size 8)) ))
 
-  (define (stub->section-header-entry-bytes stub)
+  (define (stub->section-header-entry-bytes laid-out-stubs stub)
     (if (not (= (stub->type stub) 'stub-section-header))
       '()
-      (section-header-stub->bytes stub)))
+      (section-header-stub->bytes laid-out-stubs stub)))
 
-  (define (process-stubs stubs)
-    (if (null? stubs)
+  (define (process-stubs laid-out-stubs section-header-stubs)
+    (if (null? section-header-stubs)
       '()
       (append
-        (stub->section-header-entry-bytes (car stubs))
-        (process-stubs (cdr stubs))) ) )
+        (stub->section-header-entry-bytes
+          laid-out-stubs
+          (car section-header-stubs))
+        (process-stubs laid-out-stubs (cdr section-header-stubs))) ) )
 
-  (process-stubs (elf->stubs elf)) )
+  (let* ((laid-out-section-headers-stub
+           (find-laid-out-stub-of-type laid-out-stubs 'stub-section-headers))
+         (section-header-stubs
+           (laid-out-stub->data laid-out-section-headers-stub)))
+    (process-stubs laid-out-stubs section-header-stubs) ))
 
 (define (construct-program-header-table laid-out-stubs)
-  (define (resolve-offset remaining-laid-out-stubs associated-section-id)
-    (cond
-      ((null? remaining-laid-out-stubs)
-       (error-and-exit "Stub with ID not found: " associated-section-id))
-
-      ((= (stub->id (car remaining-laid-out-stubs)) associated-section-id)
-       (laid-out-stub->offset (car remaining-laid-out-stubs)))
-
-      (else
-        (resolve-offset
-          (cdr remaining-laid-out-stubs)
-          associated-section-id)) ))
-
   (define (program-header-stub->bytes laid-out-stubs stub)
     (let* (((stub-type
               id
@@ -548,7 +570,9 @@
             stub)
 
            (associated-section-offset
-             (resolve-offset laid-out-stubs associated-section-id))
+             (resolve-offset-for-laid-out-stub-with-id
+               laid-out-stubs
+               associated-section-id))
 
            (memory-address
              (file-offset->executable-memory-address associated-section-offset)))
@@ -587,6 +611,7 @@
     (let ((stub-type (stub->type stub)))
       (cond
         ((= stub-type 'stub-text) (text-stub->code-bytes stub))
+        ((= stub-type 'stub-shstrtab) ((shstrtab-stub->shstrtab stub) 'bytes))
         (else '()) )))
 
   (define (process-stubs stubs)
