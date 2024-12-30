@@ -239,31 +239,6 @@
 
   (convert-remaining-bytes int pad-to-total-bytes))
 
-(define (num-section-headers elf)
-  (define (num-section-headers-for-stub stub)
-    (let ((type (stub->type stub)))
-      (cond ((= type 'stub-text) 1) ; Later, may contribute more sections
-            (else 0)) ))
-
-  ((compose
-     (lambda (s) (+ s 1)) ; Always include an entry for the section header
-                          ;   string table, which is needed because there is a
-                          ;   section header table in the first place
-     sum
-     (lambda (stubs) (map num-section-headers-for-stub stubs))
-     elf->stubs) elf))
-
-(define (num-program-headers elf)
-  (define (num-program-headers-for-stub stub)
-    (let ((type (stub->type stub)))
-      (cond ((= type 'stub-program-header) 1)
-            (else 0)) ))
-
-  ((compose
-     sum
-     (lambda (stubs) (map num-program-headers-for-stub stubs))
-     elf->stubs) elf))
-
 (define (file-offset->executable-memory-address file-offset)
   (+ EXECUTABLE-MEMORY-BASE-ADDRESS file-offset))
 
