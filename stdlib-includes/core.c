@@ -301,64 +301,118 @@ garlic_value_t arithmetic_shift(garlic_value_t a, garlic_value_t b) {
     else               { return a; }
 }
 
-void display_single(garlic_value_t val);
+garlic_value_t to_string(garlic_value_t val);
 
-void display_cons_inner(garlic_value_t cons) {
-    display_single(garlic_car(cons));
+garlic_value_t cons_inner_to_string(garlic_value_t cons) {
+    char *car_string_garlic_val = to_string(garlic_car(cons));
+    const char *car_string = garlic_unwrap_string(car_string_garlic_val);
+    size_t car_len = strlen(car_string);
 
     garlic_value_t cdr_val = garlic_cdr(cons);
     if (cdr_val == NIL_VALUE) {
-        // Do nothing
+        return car_string_garlic_val;
     } else if (garlic_get_type(cdr_val) == GARLIC_TYPE_CONS) {
-        printf(" ");
-        display_cons_inner(cdr_val);
+        const char *cdr_string =
+            garlic_unwrap_string(cons_inner_to_string(cdr_val));
+        size_t cdr_len = strlen(cdr_string);
+
+        size_t str_len = car_len + cdr_len + 2;
+        char *str = malloc(sizeof(char) * str_len);
+        snprintf(str, str_len, "%s %s", car_string, cdr_string);
+        return garlic_wrap_string(str);
     } else {
-        printf(" . ");
-        display_single(cdr_val);
+        const char *cdr_string =
+            garlic_unwrap_string(to_string(cdr_val));
+        size_t cdr_len = strlen(cdr_string);
+
+        size_t str_len = car_len + cdr_len + 4;
+        char *str = malloc(sizeof(char) * str_len);
+        snprintf(str, str_len, "%s . %s", car_string, cdr_string);
+        return garlic_wrap_string(str);
     }
 }
 
-void display_single(garlic_value_t val) {
+garlic_value_t to_string(garlic_value_t val) {
     enum garlic_value_type type = garlic_get_type(val);
 
     if (val == NIL_VALUE) {
-        printf("()");
+        return garlic_wrap_string("()");
     } else if (val == TRUE_VALUE) {
-        printf("#t");
+        return garlic_wrap_string("#t");
     } else if (val == FALSE_VALUE) {
-        printf("#f");
+        return garlic_wrap_string("#f");
     } else if (type == GARLIC_TYPE_FIXNUM) {
-        printf("%" PRId64, garlicval_to_int(val));
+        char *str = malloc(sizeof(char) * 50);
+        snprintf(str, 50, "%" PRId64, garlicval_to_int(val));
+        return garlic_wrap_string(str);
     } else if (type == GARLIC_TYPE_DOUBLE) {
-        printf("%f", garlicval_to_double(val));
+        char *str = malloc(sizeof(char) * 50);
+        snprintf(str, 50, "%f", garlicval_to_double(val));
+        return garlic_wrap_string(str);
     } else if (type == GARLIC_TYPE_STRING) {
-        printf("%s", garlic_unwrap_string(val));
+        return val;
     } else if (type == GARLIC_TYPE_LAMBDA) {
-        printf("#<fn: %p>", val);
+        char *str = malloc(sizeof(char) * 50);
+        snprintf(str, 50, "#<fn: %p>", val);
+        return garlic_wrap_string(str);
     } else if (type == GARLIC_TYPE_ATOM) {
-        printf("%s", garlic_atom_name(val));
+        return garlic_wrap_string(garlic_atom_name(val));
     } else if (type == GARLIC_TYPE_CONS) {
-        printf("(");
-        display_cons_inner(val);
-        printf(")");
+        const char *inner = garlic_unwrap_string(cons_inner_to_string(val));
+        size_t inner_len = strlen(inner);
+
+        size_t str_len = inner_len + 3;
+        char *str = malloc(sizeof(char) * str_len);
+        snprintf(str, str_len, "(%s)", inner);
+        return garlic_wrap_string(str);
+        return garlic_wrap_string("TODO");
     } else if (type == GARLIC_TYPE_WRAPPED_NATIVE) {
-        printf("#<native: %p>", garlic_unwrap_native(val));
+        char *str = malloc(sizeof(char) * 50);
+        snprintf(str, 50, "#<native: %p>", garlic_unwrap_native(val));
+        return garlic_wrap_string(garlic_atom_name(val));
     }
 }
 
-garlic_value_t display(garlic_value_t vals) {
-    while (vals != NIL_VALUE) {
-        garlic_value_t item = garlic_car(vals);
-        vals = garlic_cdr(vals);
-
-        display_single(item);
+garlic_value_t vals_to_concatenated_string(garlic_value_t vals) {
+    size_t numvals = 0;
+    garlic_value_t vals_to_count = vals;
+    while (vals_to_count != NIL_VALUE) {
+        numvals++;
+        vals_to_count = garlic_cdr(vals_to_count);
     }
+
+    garlic_value_t *vals_as_strings =
+        (garlic_value_t *) malloc(sizeof(garlic_value_t) * numvals);
+    if (!vals_as_strings) {
+        error_and_exit("unable to allocate memory for string concatenation");
+    }
+
+    int64_t i = 0;
+    while (vals != NIL_VALUE) {
+        garlic_value_t val = garlic_car(vals);
+        vals_as_strings[i] = to_string(val);
+
+        i++;
+        vals = garlic_cdr(vals);
+    }
+
+    garlic_value_t string_list = NIL_VALUE;
+    for (i = i - 1; i >= 0; i--) {
+        string_list = garlic_make_cons(vals_as_strings[i], string_list);
+    }
+
+    return garlic_internal_string_concat(string_list);
+}
+
+garlic_value_t display(garlic_value_t vals) {
+    garlic_value_t msg = vals_to_concatenated_string(vals);
+    printf("%s", garlic_unwrap_string(msg));
 
     return NIL_VALUE;
 }
 
 garlic_value_t error_and_exit_from_garlic(garlic_value_t msgs) {
-    garlic_value_t msg = garlic_internal_string_concat(msgs);
+    garlic_value_t msg = vals_to_concatenated_string(msgs);
     error_and_exit(garlic_unwrap_string(msg));
 }
 
