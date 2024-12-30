@@ -26,7 +26,10 @@ I'm also working on a small library for generating ELF files. While I'm developi
 # From inside the "recursive" directory
 
 ../garlic -o elf-test elf-x86-64-linux-gnu.scm
-./elf-test  # Currently prints out the bytes being generated
+./elf-test
+chmod +x generated-elf
+./generated-elf
+echo $?  # Should print "42"
 ```
 
 Why?

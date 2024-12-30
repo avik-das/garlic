@@ -2,6 +2,7 @@
 ;; The scope of this module is reduced by assuming system configuration such as
 ;; x86-64 little-endian systems.
 
+(require file)
 (require string => str)
 
 ;; UTILITIES ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -619,15 +620,13 @@
 ;; To be removed once the functionality has been tested, and the code generator
 ;; starts using this functionality.
 
-(require "compiler_temp")
-
 (define test-code
   '(0x48 0xc7 0xc0 0x3c 0x00 0x00 0x00 ; mov  $60, %rax
     0xbf 0x2a 0x00 0x00 0x00           ; mov  $42, %edi
     0x0f 0x05))                        ; syscall
 
 ((compose
-   compiler_temp:print-bytes
+   (lambda (b) (file:write-bytes "./generated-elf" b))
    (lambda (e) (emit-as-bytes e))
    (lambda (e) (add-executable-code e 'main test-code)))
  (empty-static-executable))
