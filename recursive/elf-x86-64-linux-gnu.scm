@@ -210,18 +210,11 @@
     ((= (laid-out-stub->type (car laid-out-stubs)) type) (car laid-out-stubs))
     (else (find-laid-out-stub-of-type (cdr laid-out-stubs) type)) ))
 
-(define (resolve-offset-for-laid-out-stub-with-id remaining-laid-out-stubs id)
+(define (laid-out-stub-with-id laid-out-stubs id)
   (cond
-    ((null? remaining-laid-out-stubs)
-     (error-and-exit "Stub with ID not found: " id))
-
-    ((= (stub->id (car remaining-laid-out-stubs)) id)
-     (laid-out-stub->offset (car remaining-laid-out-stubs)))
-
-    (else
-      (resolve-offset-for-laid-out-stub-with-id
-        (cdr remaining-laid-out-stubs)
-        id)) ))
+    ((null? laid-out-stubs) (error-and-exit "Stub with ID not found: " id))
+    ((= (stub->id (car laid-out-stubs)) id) (car laid-out-stubs))
+    (else (laid-out-stub-with-id (cdr laid-out-stubs) id)) ))
 
 ;; STUBS -> ELF DATA STRUCTURES ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -241,6 +234,13 @@
 
 (define (file-offset->executable-memory-address file-offset)
   (+ EXECUTABLE-MEMORY-BASE-ADDRESS file-offset))
+
+(define (file-offset->executable-memory-address-if-placeholder
+          given-memory-address
+          file-offset)
+  (if (number? given-memory-address)
+    given-memory-address
+    (file-offset->executable-memory-address file-offset) ))
 
 ;; OUTPUT ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -486,7 +486,7 @@
               associated-section-id
               section-type-bits
               flags
-              address
+              potential-memory-address
               offset
               size
               link
@@ -498,14 +498,18 @@
            (offset-in-shstrtab (shstrtab 'offset-for-name (list section-type)))
 
            (associated-section-offset
-             (resolve-offset-for-laid-out-stub-with-id
-               laid-out-stubs
-               associated-section-id)))
+             (laid-out-stub->offset
+               (laid-out-stub-with-id laid-out-stubs associated-section-id)))
+
+           (resolved-memory-address
+             (file-offset->executable-memory-address-if-placeholder
+               potential-memory-address
+               associated-section-offset)) )
       (append
         (int->little-endian offset-in-shstrtab 4)
         (int->little-endian section-type-bits 4)
         (int->little-endian flags 8)
-        '(0xfa 0xfa 0xfa 0xfa 0xfa 0xfa 0xfa 0xfa) ; TODO: address - may need resolution
+        (int->little-endian resolved-memory-address 8)
         (int->little-endian associated-section-offset 8)
         (int->little-endian size 8)
         (int->little-endian link 4)
@@ -545,9 +549,8 @@
             stub)
 
            (associated-section-offset
-             (resolve-offset-for-laid-out-stub-with-id
-               laid-out-stubs
-               associated-section-id))
+             (laid-out-stub->offset
+               (laid-out-stub-with-id laid-out-stubs associated-section-id)))
 
            (memory-address
              (file-offset->executable-memory-address associated-section-offset)))
