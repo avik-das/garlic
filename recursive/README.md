@@ -19,9 +19,31 @@ make
 chmod +x main
 ./main
 echo $?  # Should print "205"
-
-# TODO: support running in interpreted mode
 ```
+
+Note that you can change the name of the output executable:
+
+```sh
+./garlic -O executable-name test-numbers.scm
+./garlic --output executable-name test-numbers.scm
+```
+
+### Running in interpreted mode
+
+The code generation is lagging the furthest behind currently, but the lexer/parser supports many constructs already. To test the latter, the recursive implementation can be run in interpreted mode, which supports all the features the lexer/parser do:
+
+```sh
+# From inside the "recursive" directory
+make
+
+# Interpret a much more full featured program. The intepreter will output
+# anything to be displayed on the standard output. Also output it to a file to
+# compare against the reference output.
+./garlic --interpret test.scm | tee out.txt
+diff out.txt test.scm.result  # Ensure the output is correct
+```
+
+### Standalone ELF file generation
 
 I'm also working on a small library for generating ELF files. You can run a demo of the library as follows:
 
