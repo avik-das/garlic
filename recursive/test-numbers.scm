@@ -1,6 +1,12 @@
-; This file must contain only integers at the top level (and comments of
-; course). Each integer is codegen'd into an instruction that loads the value of
-; the integer into `%rax`. Whatever is the last such value then gets returned as
-; the status code of the executable.
-102 ; codegen'd but overwritten
-205 ; returned as status code
+; This file contains a series of top-level statements that are supported by the
+; codegen. Each statement is codegened in such a way as to leave the result in
+; %rax. Whatever is the last such value in %rax is the returned status code of
+; the entire execution.
+;
+; Thus, only the last top-level statement in this file has any observable
+; behavior. You can simply return comment out any lines after the one you want
+; to observe.
+205
+#t  ; represented as 2
+#f  ; represented as 4
+'() ; represented as 0
