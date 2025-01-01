@@ -25,17 +25,17 @@
   (let ((int-statements (filter ast:int? statements))
         (non-int-statements (reject ast:int? statements)))
     (if (not (null? non-int-statements))
-      ; TODO: present an error for each non-int statement, extracting the
-      ;   correct location for each statment. Right now, only `var`s have
-      ;   location information attached. In the future, all nodes should have
-      ;   locations attached!
-      ;
-      ;   Note that because the location is chosen as the start of the file, the
-      ;   error display may show the wrong code
-      (result:new-with-single-error
-        (err:new
-          (loc:start "<input>")
-          "Non-int statements not yet supported"))
+      ; Return an error for each unsupported statement
+      (result:new-error
+        (map
+          (lambda (statement)
+            (display statement) (newline)
+            (err:new
+              (ast:get-location statement)
+              "Non-int statements not yet supported"))
+          non-int-statements))
+
+      ; Only supported statements are present, codegen them one after another.
       (result:new-success (codegen-ints int-statements))) ))
 
 (define (codegen-module module)
