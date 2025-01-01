@@ -7,15 +7,19 @@
 (require "location" => loc)
 (require "result")
 
+(define (codegen-int-statement int)
+  (append
+    '(0x48 0xc7 0xc0)   ; mov <immediate>, %rax
+    (int->little-endian ;     <immediate>
+      (ast:int-get-value int)
+      4)) )
+
 (define (codegen-statement-list statements)
   (define (codegen-ints int-statements)
     (if (null? int-statements)
       '()
       (append
-        '(0x48 0xc7 0xc0)   ; mov <immediate>, %rax
-        (int->little-endian ;     <immediate>
-          (ast:int-get-value (car int-statements))
-          4)
+        (codegen-int-statement (car int-statements))
         (codegen-ints (cdr int-statements))) ))
 
   (let ((int-statements (filter ast:int? statements))
