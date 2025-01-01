@@ -6,39 +6,39 @@
 (define (var loc name)
   (list 'var loc name))
 
-(define (int val)
-  (cons 'int val))
+(define (int loc val)
+  (list 'int loc val))
 
-(define (atom val)
-  (cons 'atom val))
+(define (atom loc val)
+  (list 'atom loc val))
 
-(define (bool val)
-  (cons 'bool val))
+(define (bool loc val)
+  (list 'bool loc val))
 
-(define (str val)
-  (cons 'str val))
+(define (str loc val)
+  (list 'str loc val))
 
-(define (quoted-list ls)
-  (cons 'list ls))
+(define (quoted-list loc ls)
+  (list 'list loc ls))
 
-(define (definition name body)
-  (list 'definition name body))
+(define (definition loc name body)
+  (list 'definition loc name body))
 
-(define (conditional-clause condition body-statements)
-  (list 'cond-clause condition body-statements))
+(define (conditional-clause loc condition body-statements)
+  (list 'cond-clause loc condition body-statements))
 
-(define (conditional-else body-statements)
-  (list 'cond-else body-statements))
+(define (conditional-else loc body-statements)
+  (list 'cond-else loc body-statements))
 
-(define (conditional clauses)
-  (list 'conditional clauses))
+(define (conditional loc clauses)
+  (list 'conditional loc clauses))
 
 ; Represents a lambda
-(define (function args body)
-  (list 'function args body))
+(define (function loc args body)
+  (list 'function loc args body))
 
-(define (function-call fn args)
-  (list 'function-call fn args))
+(define (function-call loc fn args)
+  (list 'function-call loc fn args))
 
 ;; PREDICATES ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -65,34 +65,34 @@
 (define function-call? (type-checker 'function-call))
 
 ;; GETTERS ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; assumes AST nodes are already validated to be of the correct type
+;; Assumes AST nodes are already validated to be of the correct type
 
-;; Currently, not all AST nodes have a location. This may change in the future
-;; in order to unify the structure of all the nodes, but for now, only call
-;; this function for nodes that have a location.
+;; All AST nodes will have the location in a standardized place within its
+;; representation, so the location can be retrieved without knowing the type of
+;; AST node.
 (define get-location (compose car cdr))
 
 (define module-get-statements cdr)
 (define var-get-name (compose car cdr cdr))
-(define int-get-value cdr)
-(define atom-get-name cdr)
-(define bool-get-value cdr)
-(define str-get-value cdr)
-(define quoted-list-get-list cdr)
+(define int-get-value (compose car cdr cdr))
+(define atom-get-name (compose car cdr cdr))
+(define bool-get-value (compose car cdr cdr))
+(define str-get-value (compose car cdr cdr))
+(define quoted-list-get-list (compose car cdr cdr))
 
-(define definition-get-name (compose car cdr))
-(define definition-get-body (compose car cdr cdr))
+(define definition-get-name (compose car cdr cdr))
+(define definition-get-body (compose car cdr cdr cdr))
 
-(define conditional-get-clauses (compose car cdr))
-(define conditional-clause-get-condition (compose car cdr))
-(define conditional-clause-get-body-statements (compose car cdr cdr))
-(define conditional-else-get-body-statements (compose car cdr))
+(define conditional-get-clauses (compose car cdr cdr))
+(define conditional-clause-get-condition (compose car cdr cdr))
+(define conditional-clause-get-body-statements (compose car cdr cdr cdr))
+(define conditional-else-get-body-statements (compose car cdr cdr))
 
-(define function-get-args (compose car cdr))
-(define function-get-body (compose car cdr cdr))
+(define function-get-args (compose car cdr cdr))
+(define function-get-body (compose car cdr cdr cdr))
 
-(define function-call-get-function (compose car cdr))
-(define function-call-get-args (compose car cdr cdr))
+(define function-call-get-function (compose car cdr cdr))
+(define function-call-get-args (compose car cdr cdr cdr))
 
 ;; EXPORTS ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

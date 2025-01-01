@@ -89,13 +89,18 @@
      (result:transform-success
        (lambda (analyzed)
          (result:new-success
-           (ast:definition (ast:definition-get-name node) analyzed)))
+           (ast:definition
+             (ast:get-location node)
+             (ast:definition-get-name node)
+             analyzed)))
        (analyze-ast-node (ast:definition-get-body node) names-in-scope) ) )
 
     ; A conditional does not define any new names
     ((ast:conditional? node)
      (result:transform-success
-       (compose result:new-success ast:conditional)
+       (lambda (analyzed-clauses)
+         (result:new-success
+           (ast:conditional (ast:get-location node) analyzed-clauses)))
        (result:combine-results
          (map
            (lambda (node) (analyze-ast-node node names-in-scope))
@@ -106,7 +111,10 @@
      (result:transform-success
        (lambda (analyzed)
          (result:new-success
-           (ast:conditional-clause (car analyzed) (car (cdr analyzed)))))
+           (ast:conditional-clause
+             (ast:get-location (car analyzed))
+             (car analyzed)
+             (car (cdr analyzed)))))
        (result:combine-results
          (list
            (analyze-ast-node
@@ -119,7 +127,9 @@
     ; A conditional else does not define any new names
     ((ast:conditional-else? node)
      (result:transform-success
-       (compose result:new-success ast:conditional-else)
+       (lambda (analyzed)
+         (result:new-success
+           (ast:conditional-else (ast:get-location node) analyzed)))
        (analyze-statement-list
          (ast:conditional-else-get-body-statements node)
          names-in-scope) ) )
@@ -130,7 +140,8 @@
             (new-names-in-scope (set:add-all names-in-scope args)))
        (result:transform-success
          (lambda (analyzed)
-           (result:new-success (ast:function args analyzed)))
+           (result:new-success
+             (ast:function (ast:get-location node) args analyzed)))
          (analyze-statement-list
            (ast:function-get-body node)
            new-names-in-scope) ) ))
@@ -140,7 +151,10 @@
      (result:transform-success
        (lambda (analyzed)
          (result:new-success
-           (ast:function-call (car analyzed) (cdr analyzed))))
+           (ast:function-call
+             (ast:get-location node)
+             (car analyzed)
+             (cdr analyzed))))
        (result:combine-results
          (map
            (lambda (node) (analyze-ast-node node names-in-scope))

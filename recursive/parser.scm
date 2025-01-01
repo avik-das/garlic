@@ -104,17 +104,13 @@
   (ast:module (map subtree-to-ast tree)))
 
 (define (subtree-to-ast tree)
-  (cond
-    ((tok:id? tree)
-     (ast:var (tok:get-location tree) (tok:id-get-name tree)))
-
-    ((tok:int? tree) (ast:int (tok:int-get-value tree)))
-
-    ((tok:bool? tree) (ast:bool (tok:bool-get-value tree)))
-
-    ((tok:str? tree) (ast:str (tok:str-get-value tree)))
-
-    ((list? tree) (specialize-subtree tree)) ))
+  (let ((loc (tok:get-location tree)))
+    (cond
+      ((tok:id? tree) (ast:var loc (tok:id-get-name tree)))
+      ((tok:int? tree) (ast:int loc (tok:int-get-value tree)))
+      ((tok:bool? tree) (ast:bool loc (tok:bool-get-value tree)))
+      ((tok:str? tree) (ast:str loc (tok:str-get-value tree)))
+      ((list? tree) (specialize-subtree tree)) )))
 
 (define (specialize-subtree tree)
   (define (is-type? type name)
@@ -140,6 +136,7 @@
            ; In this case, only one statement is supported in the "body", so
            ; the body is assumed to be a single element list.
            (ast:definition
+             (tok:get-location keyword)
              (tok:id-get-name name)
              (subtree-to-ast (car body))) )
 
@@ -157,6 +154,7 @@
            ;
            ;   (define function-name (lambda (arg0 arg 1) ...))
            (ast:definition
+             (tok:get-location keyword)
              (tok:id-get-name (car name))
              (subtree-to-lambda
                ; Synthesize a list of tokens representing a lambda. Notice that
@@ -175,35 +173,42 @@
   ; list of the lambda is a flat list of identifiers.
   (let (((keyword args . statements) tree))
     (ast:function
+      (tok:get-location keyword)
       (map tok:id-get-name args)
       (map subtree-to-ast statements)) ))
 
 (define (subtree-to-quoted tree)
-  (define (helper to-quote)
+  (define (helper outer-loc to-quote)
     (cond
-      ((null? to-quote) (ast:quoted-list '()))
-
-      ((tok:id? to-quote) (ast:atom (tok:id-get-name to-quote)))
-      ((tok:int? to-quote) (ast:int (tok:int-get-value to-quote)))
-      ((tok:bool? to-quote) (ast:bool (tok:bool-get-value to-quote)))
-
+      ((null? to-quote) (ast:quoted-list outer-loc '()))
+      ((tok:id? to-quote) (ast:atom outer-loc (tok:id-get-name to-quote)))
+      ((tok:int? to-quote) (ast:int outer-loc (tok:int-get-value to-quote)))
+      ((tok:bool? to-quote) (ast:bool outer-loc (tok:bool-get-value to-quote)))
       ((list? to-quote)
-       (ast:quoted-list (map helper to-quote)))
+       (ast:quoted-list
+         outer-loc
+         (map
+           (lambda (subtree) (helper (tok:get-location (car to-quote)) subtree))
+           to-quote)))
+      (else (error-and-exit "ERROR - invalid quoted value ^")) ))
 
-      (else
-        (display "\033[1;31m" to-quote "\033[0m") (newline)
-        (error-and-exit "ERROR - invalid quoted value ^")) ))
-
-  (helper (cdr tree)))
+  (helper (tok:get-location (car tree)) (cdr tree)))
 
 (define (subtree-if-to-cond tree)
-  (let (((keyword condition true-clause false-clause) tree))
+  (let* (((keyword condition true-clause false-clause) tree)
+         (loc (tok:get-location keyword))
+         (true-clause-ast (subtree-to-ast true-clause))
+         (false-clause-ast (subtree-to-ast false-clause)))
     (ast:conditional
+      loc
       (list
         (ast:conditional-clause
+          (ast:get-location true-clause-ast)
           (subtree-to-ast condition)
-          (list (subtree-to-ast true-clause)))
-        (ast:conditional-else (list (subtree-to-ast false-clause))))) ))
+          (list true-clause-ast))
+        (ast:conditional-else
+          (ast:get-location false-clause-ast)
+          (list false-clause-ast)))) ))
 
 (define (subtree-cond-to-cond tree)
   (define (subtree-to-clause subtree)
@@ -211,17 +216,26 @@
            (body-statements-ast (map subtree-to-ast body-statements)))
       (if (and (tok:id? condition)
                (str:string=? (tok:id-get-name condition) "else"))
-          (ast:conditional-else body-statements-ast)
-          (ast:conditional-clause
-            (subtree-to-ast condition)
-            body-statements-ast)) ))
+          ; Else clause
+          (ast:conditional-else
+            (tok:get-location condition)
+            body-statements-ast)
+
+          ; Regular clause
+          (let* ((condition-ast (subtree-to-ast condition))
+                 (condition-loc (ast:get-location condition-ast)))
+            (ast:conditional-clause
+              condition-loc
+              condition-ast
+              body-statements-ast))) ))
 
   (ast:conditional
+    (tok:get-location (car tree))
     (map subtree-to-clause (cdr tree))) )
 
 (define (subtree-to-function-call tree)
   (let (((fn . args) (map subtree-to-ast tree)))
-    (ast:function-call fn args)) )
+    (ast:function-call (tok:get-location (car tree)) fn args)) )
 
 (module-export
   parse)
