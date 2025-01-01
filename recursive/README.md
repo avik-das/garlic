@@ -14,10 +14,13 @@ Quick Start
 # Build the recursive implementation
 make
 
-# Run it against the included test file. Because the current implementation
-# is an interpreter instead of a compiler, this will evaluate the test file
-# directly instead of creating another executable.
-./garlic test.scm
+# Compile a simple "program" that just outputs an integer
+./garlic test-numbers.scm  # Writes a file named "main"
+chmod +x main
+./main
+echo $?  # Should print "205"
+
+# TODO: support running in interpreted mode
 ```
 
 I'm also working on a small library for generating ELF files. You can run a demo of the library as follows:

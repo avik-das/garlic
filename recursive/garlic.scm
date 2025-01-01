@@ -8,6 +8,8 @@
 (require "lexer")
 (require "parser")
 (require "static-analyzer")
+(require "codegen")
+(require "elf-x86-64-linux-gnu" => elf)
 (require "evaluator")
 
 (require "compiler_utils" => compiler-utils)
@@ -106,12 +108,16 @@
     (lambda (lexed) (parser:parse lexed))
     (lambda (module) (static-analyzer:analyze-module module))
     (lambda (module)
-      (evaluator:eval-module module)
-      (result:new-success '())) ))
+      (codegen:write-executable-elf-from-module "main" module)) ))
+
+    ; TODO: add back ability to run the evaluator using a command line param
+    ; (lambda (module)
+    ;   (evaluator:eval-module module)
+    ;   (result:new-success '())) ))
 
 (if (result:is-error? final-result)
-    (begin
-      (show-errors input (result:get-errors final-result))
-      (newline)
-      (error-and-exit "COMPILATION FAILED"))
-    '() ) ; Otherwise: continue
+  (begin
+    (show-errors input (result:get-errors final-result))
+    (newline)
+    (error-and-exit "COMPILATION FAILED"))
+  '() ) ; Otherwise: continue
