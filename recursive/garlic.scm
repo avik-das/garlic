@@ -34,10 +34,10 @@
     ; Put a limit of 99,999 for the number. This is to avoid needing to
     ; implement division and rounding, or other methods of determining the
     ; number of digits in a number.
-    (cond ((> int 10000) 5)
-          ((> int  1000) 4)
-          ((> int   100) 3)
-          ((> int    10) 2)
+    (cond ((> int 9999) 5)
+          ((> int  999) 4)
+          ((> int   99) 3)
+          ((> int    9) 2)
           (else 1) ))
 
   (define (show-single-error err)
