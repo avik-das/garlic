@@ -10,3 +10,9 @@
 #t  ; represented as 2
 #f  ; represented as 4
 '() ; represented as 0
+
+(if #t 1 2)
+(cond
+  (#t 10)
+  (#f 20)
+  (else 30))

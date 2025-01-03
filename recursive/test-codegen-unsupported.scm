@@ -16,11 +16,11 @@
 '#f
 '(1 2 3) ; List literals are not supported
 
-(if #t 1 2) ; Conditionals are not supported
+(if (= 1 2) (+ 1 2) (* 1 2)) ; Function calls are not supported
 (cond
-  (#t 1)
-  (#f 2)
-  (else 3))
+  ((= 1 2) (+ 1 2))
+  ((= 2 2) (* 1 2))
+  (else (- 1 2)))
 
 
 205

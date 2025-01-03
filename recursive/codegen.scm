@@ -4,15 +4,43 @@
 (require "byte-utils" *)
 (require "compiler-error" => err)
 (require "elf-x86-64-linux-gnu" => elf)
+(require "label-resolution")
 (require "location" => loc)
 (require "result")
+
+;; OPCODES ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(define (fits-in-sint8 int)
+  (and (> int -129)
+       (< int  128)) )
+
+(define (int->uint8  int) (byte-utils:int->little-endian int 1))
+(define (int->uint32 int) (byte-utils:int->little-endian int 4))
+
+(define (opcode-je-to-label label)
+  (define (generator delta)
+    (if (fits-in-sint8 delta)
+      (cons          0x74  (int->uint8  delta))
+      (append '(0x0f 0x84) (int->uint32 delta)) ))
+
+  (label-resolution:label-ref generator (list label)) )
+
+(define (opcode-jmp-to-label label)
+  (define (generator delta)
+    (if (fits-in-sint8 delta)
+      (cons 0xeb (int->uint8  delta))
+      (cons 0xe9 (int->uint32 delta)) ))
+
+  (label-resolution:label-ref generator (list label)) )
+
+;; AST CODEGEN ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define (codegen-int int)
   (result:new-success
     (append
       '(0x48 0xc7 0xc0)   ; mov <immediate>, %rax
       (int->little-endian ;     <immediate>
-        (ast:int-get-value int)
+        (ast:int-get-value int) ; TODO: convert to fixnum representation
         4))) )
 
 (define (codegen-bool bool)
@@ -25,16 +53,6 @@
         4))) )
 
 (define (codegen-conditional conditional)
-  ; TODO
-  ;
-  ; The tricky part about the conditionals is supporting jumps to other
-  ; addresses, addresses that depend on the results of codegen of the contained
-  ; expressions. We might have to think about a general label-handling strategy
-  ; across the board, as function calls may require labels as well.
-  ;
-  ; For now, return an error, but here's the code->assembly translation for
-  ; reference (based on the Ruby implementation).
-  ;
   ; SAMPLE GARLIC CODE:
   ;
   ;   (cond
@@ -45,6 +63,7 @@
   ;
   ; CORRESPONDING ASSEMBLY:
   ;
+  ;   label_1:
   ;     <code for cond-1>
   ;     cmp  $4, %rax
   ;     je   label_2
@@ -53,23 +72,113 @@
   ;   label_2:
   ;     <code for cond-2>
   ;     cmp  $4, %rax
-  ;     je   label_else
+  ;     je   label_3
   ;     <code for body-2>
   ;     jmp  label_end
   ;   label_3:
   ;     <code for cond-3>
   ;     cmp  $4, %rax
-  ;     je   label_else
+  ;     je   label_4
   ;     <code for body-3>
   ;     jmp  label_end
-  ;   label_else:
+  ;   label_4:
   ;     <code for body-else>
   ;   label_end:
 
-  (result:new-with-single-error
-    (err:new
-      (ast:get-location conditional)
-      "Conditionals not yet supported by codegen")) )
+  (define (state-new insts index) (list insts index))
+  (define (initial-state) (state-new '() 0))
+  (define (state->next state added-insts)
+    (state-new
+      (append (state-get-insts state) added-insts)
+      (+ (state-get-index state) 1)) )
+  (define state-get-insts car)
+  (define state-get-index (compose car cdr))
+
+  (define (partial-codegen-clause index max-index clause)
+    (let* ((expr-cond (ast:conditional-clause-get-condition clause))
+           (result-cond (codegen-statement-list (list expr-cond)))
+
+           (expr-body (ast:conditional-clause-get-body-statements clause))
+           (result-body (codegen-statement-list expr-body))
+
+           (result-combined
+             (result:combine-results (list result-cond result-body))))
+      (result:transform-success
+        (lambda (cond-and-body)
+          (result:new-success
+            (list
+              (label-resolution:label-def index)
+
+              ; Evaluate condition
+              (label-resolution:bytes (car cond-and-body))
+
+              ; If condition is false, jump to next clause
+              (label-resolution:bytes '(0x48 0x83 0xf8 0x04)) ; cmp $4, %rax
+              (opcode-je-to-label (+ index 1))
+
+              ; Otherwise (condition is true):
+              ;
+              ; Execute body
+              (label-resolution:bytes (car (cdr cond-and-body)))
+
+              ; And if needed, jump (skip) all the way to the end
+              (if (= index max-index)
+                (label-resolution:bytes '())
+                (opcode-jmp-to-label 'end)) )))
+        result-combined) ))
+
+  (define (partial-codegen-else index clause)
+    (let* ((expr-body (ast:conditional-else-get-body-statements clause))
+           (result-body (codegen-statement-list expr-body)))
+      (result:transform-success
+        (lambda (body)
+          (result:new-success
+            (list
+              (label-resolution:label-def index)
+              (label-resolution:bytes body) )))
+        result-body) ))
+
+  (define (partial-codegen)
+    (let* ((clauses (ast:conditional-get-clauses conditional))
+           (num-clauses (length clauses))
+           (max-index (- num-clauses 1)))
+      (define (reducer maybe-state clause)
+        (define (add-insts-to-state state added-insts)
+          (result:new-success
+            (state->next (result:get-value maybe-state) added-insts)))
+
+        (if (result:is-error? maybe-state)
+          maybe-state
+
+          (let* ((state (result:get-value maybe-state))
+                 (add-insts (lambda (insts) (add-insts-to-state state insts))))
+            (if (ast:conditional-clause? clause)
+              (result:transform-success
+                add-insts
+                (partial-codegen-clause
+                  (state-get-index state)
+                  max-index
+                  clause))
+
+              ; else clause
+              (result:transform-success
+                add-insts
+                (partial-codegen-else (state-get-index state) clause)) )) ))
+
+      (result:transform-success
+        (lambda (reduced-state)
+          (result:new-success
+            (append
+              (state-get-insts reduced-state)
+              (list (label-resolution:label-def 'end)) ) ))
+        (reduce reducer (result:new-success (initial-state)) clauses)) ))
+
+  (let* ((insts (partial-codegen)))
+    (result:transform-success
+      (lambda (insts)
+        (result:new-success
+          (label-resolution:resolve-local-labels insts)))
+      insts) ))
 
 (define (codegen-quoted-list list-expression)
   (let ((ls (ast:quoted-list-get-list list-expression)))
@@ -117,6 +226,8 @@
               0x48 0xc7 0xc0 0x3c 0x00 0x00 0x00 ; mov  $60, %rax
               0x0f 0x05))))                      ; syscall
         code-result) ))
+
+;; MAIN LOGIC ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Generate an ELF file corresponding to the given module, returning a "result"
 ;; with either all the errors that were found, or an empty successful result
