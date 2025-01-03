@@ -286,6 +286,16 @@ garlic_value_t bitwise_and(garlic_value_t a, garlic_value_t b) {
     return int_to_garlicval(garlicval_to_int(a) & garlicval_to_int(b));
 }
 
+garlic_value_t bitwise_ior(garlic_value_t a, garlic_value_t b) {
+    if (garlic_get_type(a) != GARLIC_TYPE_FIXNUM ||
+            garlic_get_type(b) != GARLIC_TYPE_FIXNUM) {
+        error_and_exit("ERROR: bitwise-and can only be applied to integers");
+    }
+
+    // TODO: implement
+    return int_to_garlicval(garlicval_to_int(a) | garlicval_to_int(b));
+}
+
 garlic_value_t arithmetic_shift(garlic_value_t a, garlic_value_t b) {
     if (garlic_get_type(a) != GARLIC_TYPE_FIXNUM ||
             garlic_get_type(b) != GARLIC_TYPE_FIXNUM) {
@@ -439,6 +449,7 @@ garlic_native_export_t core_exports[] = {
     {">", greater_than, 2},
 
     {"bitwise-and", bitwise_and, 2},
+    {"bitwise-ior", bitwise_ior, 2},
     {"arithmetic-shift", arithmetic_shift, 2},
 
     {"display", display, 0, 1},
