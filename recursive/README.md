@@ -18,7 +18,7 @@ make
 ./garlic test-numbers.scm  # Writes a file named "main"
 chmod +x main
 ./main
-echo $?  # Should print "205"
+echo $?  # Should print an integer (will depend on latest state of repo)
 ```
 
 Note that you can change the name of the output executable:

@@ -4,6 +4,7 @@
 
 ;; UTILITIES ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+; Consider moving this to a common location
 (define (repeat-value val times)
   (define (helper so-far times-left)
     (if (= times-left 0)

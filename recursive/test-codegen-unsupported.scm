@@ -12,8 +12,6 @@
 
 "abc" ; Various atoms are not supported
 'atom
-#f
-'#f
 '(1 2 3) ; List literals are not supported
 
 (if (= 1 2) (+ 1 2) (* 1 2)) ; Function calls are not supported

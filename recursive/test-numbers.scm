@@ -9,6 +9,8 @@
 205
 #t  ; represented as 2
 #f  ; represented as 4
+'#t ; quoted booleans evaluate to their corresponding booleans
+'#f
 '() ; represented as 0
 
 (if #t 1 2)
