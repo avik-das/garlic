@@ -17,6 +17,11 @@
 (define (int->uint8  int) (byte-utils:int->little-endian int 1))
 (define (int->uint32 int) (byte-utils:int->little-endian int 4))
 
+(define (opcode-mov-imm32 val)
+  (append
+    '(0x48 0xc7 0xc0)             ; mov <immediate>, %rax
+    (int->little-endian val 4) )) ;     <immediate>
+
 (define (opcode-je-to-label label)
   (define (generator delta)
     (if (fits-in-sint8 delta)
@@ -37,20 +42,18 @@
 
 (define (codegen-int int)
   (result:new-success
-    (append
-      '(0x48 0xc7 0xc0)   ; mov <immediate>, %rax
-      (int->little-endian ;     <immediate>
-        (ast:int-get-value int) ; TODO: convert to fixnum representation
-        4))) )
+    (opcode-mov-imm32
+      ; Integers are represented as tagged pointers:
+      ;
+      ;   val = (raw << 1) | 1
+      (bitwise-ior
+        (arithmetic-shift (ast:int-get-value int) 1)
+        1)) ))
 
 (define (codegen-bool bool)
   (result:new-success
-    (append
-      '(0x48 0xc7 0xc0)   ; mov <immediate>, %rax
-      (int->little-endian ;     <immediate>
-        ; Booleans are represented as tagged pointers
-        (if (ast:bool-get-value bool) 2 4)
-        4))) )
+    ; Booleans are represented as tagged pointers
+    (opcode-mov-imm32 (if (ast:bool-get-value bool) 2 4)) ))
 
 (define (codegen-conditional conditional)
   ; SAMPLE GARLIC CODE:
