@@ -1,4 +1,4 @@
-tiny: tiny.s
+%: %.s
 	$(CC) -nostdlib -static $< -o $@
 	strip $@
 

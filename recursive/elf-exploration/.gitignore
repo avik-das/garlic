@@ -1,2 +1,6 @@
+# Compiled or assembled programs
 /tiny
+/write
+
+# Programs written "by hand"
 /from-scratch
