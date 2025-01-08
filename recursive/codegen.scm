@@ -1,3 +1,4 @@
+(require assoc)
 (require file)
 
 (require "ast")
@@ -8,6 +9,47 @@
 (require "location" => loc)
 (require "result")
 
+;; CODEGEN DATA STRUCTURE ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(define (cg-new code data) (list code data))
+(define (cg-empty) (cg-new '() (assoc:empty)))
+(define (cg-code code) (cg-new code (assoc:empty)))
+(define cg-code-single (compose cg-code list))
+
+(define cg-get-code car)
+(define cg-get-data (compose car cdr))
+
+(define (cg-append-code cg added-code)
+  (let (((old-code data) cg))
+    (cg-new
+      (append old-code added-code)
+      data) ))
+
+(define (cg-append-data cg added-data-key added-data-value)
+  (let (((code old-data) cg))
+    (cg-new
+      code
+      (assoc:add old-data added-data-key added-data-value)) ))
+
+(define (cg-map-code f cg)
+  (let (((old-code data) cg))
+    (cg-new
+      (f old-code)
+      data) ))
+
+(define (cg-merge cg1 cg2)
+  (let (((code1 data1) cg1)
+        ((code2 data2) cg2))
+    (cg-new
+      (append code1 code2)
+      (assoc:merge data1 data2)) ))
+
+(define (cg-merge-all cgs)
+  (reduce cg-merge (cg-empty) cgs))
+
+(define (cg-resolve-labels partial-cg)
+  (cg-map-code label-resolution:resolve-local-labels partial-cg))
+
 ;; OPCODES ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define (fits-in-sint8 int)
@@ -17,6 +59,7 @@
 (define (int->uint8  int) (byte-utils:int->little-endian int 1))
 (define (int->uint32 int) (byte-utils:int->little-endian int 4))
 
+; TODO: specify register somehow
 (define (opcode-mov-imm32 val)
   (append
     '(0x48 0xc7 0xc0)             ; mov <immediate>, %rax
@@ -42,18 +85,20 @@
 
 (define (codegen-int int)
   (result:new-success
-    (opcode-mov-imm32
-      ; Integers are represented as tagged pointers:
-      ;
-      ;   val = (raw << 1) | 1
-      (bitwise-ior
-        (arithmetic-shift (ast:int-get-value int) 1)
-        1)) ))
+    (cg-code
+      (opcode-mov-imm32
+        ; Integers are represented as tagged pointers:
+        ;
+        ;   val = (raw << 1) | 1
+        (bitwise-ior
+          (arithmetic-shift (ast:int-get-value int) 1)
+          1))) ))
 
 (define (codegen-bool bool)
   (result:new-success
-    ; Booleans are represented as tagged pointers
-    (opcode-mov-imm32 (if (ast:bool-get-value bool) 2 4)) ))
+    (cg-code
+      ; Booleans are represented as tagged pointers
+      (opcode-mov-imm32 (if (ast:bool-get-value bool) 2 4))) ))
 
 (define (codegen-conditional conditional)
   ; SAMPLE GARLIC CODE:
@@ -88,14 +133,16 @@
   ;     <code for body-else>
   ;   label_end:
 
-  (define (state-new insts index) (list insts index))
-  (define (initial-state) (state-new '() 0))
-  (define (state->next state added-insts)
+  (define (state-new cg index) (list cg index))
+  (define (initial-state) (state-new (cg-empty) 0))
+  (define (state->next state added-cg)
     (state-new
-      (append (state-get-insts state) added-insts)
+      (cg-merge (state-get-cg state) added-cg)
       (+ (state-get-index state) 1)) )
-  (define state-get-insts car)
+  (define state-get-cg car)
   (define state-get-index (compose car cdr))
+
+  (define code-bytes-to-partial-cg-bytes (compose list label-resolution:bytes))
 
   (define (partial-codegen-clause index max-index clause)
     (let* ((expr-cond (ast:conditional-clause-get-condition clause))
@@ -107,57 +154,65 @@
            (result-combined
              (result:combine-results (list result-cond result-body))))
       (result:transform-success
-        (lambda (cond-and-body)
+        (lambda (cond-and-body-cgs)
           (result:new-success
-            (list
-              (label-resolution:label-def index)
+            (cg-merge-all
+              (list
+                (cg-code-single (label-resolution:label-def index))
 
-              ; Evaluate condition
-              (label-resolution:bytes (car cond-and-body))
+                ; Evaluate condition
+                (cg-map-code
+                  code-bytes-to-partial-cg-bytes
+                  (car cond-and-body-cgs))
 
-              ; If condition is false, jump to next clause
-              (label-resolution:bytes '(0x48 0x83 0xf8 0x04)) ; cmp $4, %rax
-              (opcode-je-to-label (+ index 1))
+                ; If condition is false, jump to next clause
+                (cg-code
+                  (list
+                    (label-resolution:bytes '(0x48 0x83 0xf8 0x04)) ; cmp $4, %rax
+                    (opcode-je-to-label (+ index 1))))
 
-              ; Otherwise (condition is true):
-              ;
-              ; Execute body
-              (label-resolution:bytes (car (cdr cond-and-body)))
+                ; Otherwise (condition is true):
+                ;
+                ; Execute body
+                (cg-map-code
+                  code-bytes-to-partial-cg-bytes
+                  (car (cdr cond-and-body-cgs)))
 
-              ; And if needed, jump (skip) all the way to the end
-              (if (= index max-index)
-                (label-resolution:bytes '())
-                (opcode-jmp-to-label 'end)) )))
+                ; And if needed, jump (skip) all the way to the end
+                (cg-code-single
+                  (if (= index max-index)
+                    (label-resolution:bytes '())
+                    (opcode-jmp-to-label 'end))) ))))
         result-combined) ))
 
   (define (partial-codegen-else index clause)
     (let* ((expr-body (ast:conditional-else-get-body-statements clause))
-           (result-body (codegen-statement-list expr-body)))
+           (result-body-cg (codegen-statement-list expr-body)))
       (result:transform-success
-        (lambda (body)
+        (lambda (body-cg)
           (result:new-success
-            (list
-              (label-resolution:label-def index)
-              (label-resolution:bytes body) )))
-        result-body) ))
+            (cg-merge
+              (cg-code-single (label-resolution:label-def index))
+              (cg-map-code code-bytes-to-partial-cg-bytes body-cg) )))
+        result-body-cg) ))
 
   (define (partial-codegen)
     (let* ((clauses (ast:conditional-get-clauses conditional))
            (num-clauses (length clauses))
            (max-index (- num-clauses 1)))
       (define (reducer maybe-state clause)
-        (define (add-insts-to-state state added-insts)
+        (define (add-cg-to-state state added-cg)
           (result:new-success
-            (state->next (result:get-value maybe-state) added-insts)))
+            (state->next (result:get-value maybe-state) added-cg)))
 
         (if (result:is-error? maybe-state)
           maybe-state
 
           (let* ((state (result:get-value maybe-state))
-                 (add-insts (lambda (insts) (add-insts-to-state state insts))))
+                 (add-cg (lambda (cg) (add-cg-to-state state cg))))
             (if (ast:conditional-clause? clause)
               (result:transform-success
-                add-insts
+                add-cg
                 (partial-codegen-clause
                   (state-get-index state)
                   max-index
@@ -165,28 +220,27 @@
 
               ; else clause
               (result:transform-success
-                add-insts
+                add-cg
                 (partial-codegen-else (state-get-index state) clause)) )) ))
 
       (result:transform-success
         (lambda (reduced-state)
           (result:new-success
-            (append
-              (state-get-insts reduced-state)
+            (cg-append-code
+              (state-get-cg reduced-state)
               (list (label-resolution:label-def 'end)) ) ))
         (reduce reducer (result:new-success (initial-state)) clauses)) ))
 
-  (let* ((insts (partial-codegen)))
+  (let* ((partial-cg (partial-codegen)))
     (result:transform-success
-      (lambda (insts)
-        (result:new-success
-          (label-resolution:resolve-local-labels insts)))
-      insts) ))
+      (compose result:new-success cg-resolve-labels)
+      partial-cg) ))
 
 (define (codegen-quoted-list list-expression)
   (let ((ls (ast:quoted-list-get-list list-expression)))
     (if (null? ls)
-      (result:new-success '(0x48 0xc7 0xc0 0x00 0x00 0x00 0x00)) ; mov $0, %rax
+      (result:new-success
+        (cg-code '(0x48 0xc7 0xc0 0x00 0x00 0x00 0x00))) ; mov $0, %rax
 
       ; TODO: non-nil list support requires a runtime with "cons" functionality
       (result:new-with-single-error
@@ -195,11 +249,6 @@
           "Non-nil lists not yet supported by codegen")) )))
 
 (define (codegen-statement-list statements)
-  (define (concat-lists lists)
-    (if (null? lists)
-      '()
-      (append (car lists) (concat-lists (cdr lists))) ))
-
   (define (codegen-statement statement)
     (cond
       ((ast:int? statement) (codegen-int statement))
@@ -213,22 +262,22 @@
             "Statement not yet supported by codegen"))) ))
 
   (result:transform-success
-    (compose result:new-success concat-lists)
+    (compose result:new-success cg-merge-all)
     (result:combine-results
       (map codegen-statement statements))) )
 
 (define (codegen-module module)
-  (let ((code-result
+  (let ((cg-result
           (codegen-statement-list (ast:module-get-statements module))) )
     (result:transform-success
-      (lambda (code)
+      (lambda (cg)
         (result:new-success
-          (append
-            code
+          (cg-append-code
+            cg
             '(0x48 0x89 0xc7                     ; mov  %rax, %rdi
               0x48 0xc7 0xc0 0x3c 0x00 0x00 0x00 ; mov  $60, %rax
               0x0f 0x05))))                      ; syscall
-        code-result) ))
+        cg-result) ))
 
 ;; MAIN LOGIC ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -243,9 +292,9 @@
 ;; @param filename - the filename to write to
 ;; @param module - the module to generate the ELF file for
 (define (write-executable-elf-from-module filename module)
-  (let ((code-result (codegen-module module)))
+  (let ((cg-result (codegen-module module)))
     (result:transform-success
-      (lambda (code)
+      (lambda (cg)
         ((compose
            (lambda (_) (result:new-success '()))
            ; Note: the file module doesn't indicate errors using the "result"
@@ -254,9 +303,9 @@
            ; must have been successful.
            (lambda (b) (file:write-bytes filename b))
            (lambda (e) (elf:emit-as-bytes e))
-           (lambda (e) (elf:add-executable-code e 'main code)))
+           (lambda (e) (elf:add-executable-code e 'main (cg-get-code cg))))
          (elf:empty-static-executable)))
-      code-result) ))
+      cg-result) ))
 
 (module-export
   write-executable-elf-from-module)
