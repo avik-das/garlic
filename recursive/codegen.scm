@@ -65,6 +65,10 @@
     '(0x48 0xc7 0xc0)             ; mov <immediate>, %rax
     (int->little-endian val 4) )) ;     <immediate>
 
+; TODO: specify register somehow
+(define (opcode-cmp-imm8 val)
+  (list 0x48 0x83 0xf8 val)) ; cmp <immediate>, %rax
+
 (define (opcode-je-to-label label)
   (define (generator delta)
     (if (fits-in-sint8 delta)
@@ -168,7 +172,7 @@
                 ; If condition is false, jump to next clause
                 (cg-code
                   (list
-                    (label-resolution:bytes '(0x48 0x83 0xf8 0x04)) ; cmp $4, %rax
+                    (label-resolution:bytes (opcode-cmp-imm8 4))
                     (opcode-je-to-label (+ index 1))))
 
                 ; Otherwise (condition is true):
