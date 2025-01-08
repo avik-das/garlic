@@ -39,6 +39,7 @@
 ;; CONSTRUCTORS ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define (empty) '())
+(define (singleton key value) (add (empty) key value))
 
 ;; GETTERS ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -69,11 +70,20 @@
 (define (add alist key value)
   (cons (cons key value) alist) )
 
+;; Given two association lists, merge the two into a single association list.
+;; If the two input lists have any overlapping keys, the value in the second
+;; list will take precedence over the value in the first.
+(define (merge alist1 alist2)
+  ; Make sure the second list comes earlier, in order for its entries to shadow
+  ; the entries in the first list
+  (append alist2 alist1))
+
 ;; EXPORTS ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (module-export
   ; Constructors
   empty
+  singleton
 
   ; Getters
   get
@@ -82,4 +92,5 @@
   has-key?
 
   ; Operations
-  add)
+  add
+  merge)
