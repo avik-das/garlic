@@ -151,16 +151,32 @@ void init_atom_db() {
     }
 }
 
-void create_atom(char *name) {
+garlic_value_t create_atom(char *name) {
     garlic_value_t atom = make_atom_from_name(name);
     hashmap_put(atom_db, name, atom);
+
+    return atom;
 }
 
 garlic_value_t get_atom(char *name) {
     garlic_value_t value_ptr = (garlic_value_t) malloc(sizeof(int64_t));
-    hashmap_get(atom_db, name, &value_ptr);
+    int result = hashmap_get(atom_db, name, &value_ptr);
+
+    if (result == MAP_MISSING) {
+        free(value_ptr);
+        return NIL_VALUE;
+    }
 
     return value_ptr;
+}
+
+garlic_value_t garlic_intern_atom(char *name) {
+    garlic_value_t existing = get_atom(name);
+    if (existing != NIL_VALUE) {
+        return existing;
+    }
+
+    return create_atom(name);
 }
 
 /** RUNTIME CHECKS ************************************************************/

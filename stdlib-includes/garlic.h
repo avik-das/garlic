@@ -76,6 +76,12 @@ const char * garlic_unwrap_string(garlic_value_t wrapped);
  * making it efficient to look up. */
 size_t garlic_string_length(garlic_value_t string);
 
+/* Register an atom from the given C string value. This process is known as
+ * "string interning", in which only one copy of a string is stored. If an atom
+ * with the same name is already present return that, otherwise return a newly-
+ * created atom. */
+garlic_value_t garlic_intern_atom(char *name);
+
 /* Returns a C-string representation of an atom's name. Normally, the name
  * should not be used, since the point of an atom is that all occurences of a
  * specific atom are stored in the same location in memory. However, getting
