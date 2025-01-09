@@ -34,10 +34,11 @@ Programs available as reference (all buildable using `make <name-of-binary>`):
 ### Make a minimal ELF binary "by hand"
 
 ```sh
-# Make the binary by running the script
-make from-scratch
+# Make the binary by running the script. Make sure you have Ruby installed
+./write-elf.rb
 
 # Ensure the binary runs correctly
+chmod +x from-scratch
 ./from-scratch
 echo $?  # should show "42"
 
