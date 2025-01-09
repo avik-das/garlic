@@ -58,6 +58,22 @@
       (cdr pair)
       pair) ))
 
+;; Return a list of all the pairs in the given association list, without
+;; duplicate keys. The order of the returned pairs is undefined, but the order
+;; doesn't matter because there are no duplicate keys.
+;;
+;; The returned list is itself an association list.
+(define (pairs alist)
+  (define (add-if-absent pairs-so-far pair-to-add)
+    (let* ((keys-so-far (map car pairs-so-far))
+           (key-to-add (car pair-to-add))
+           (key-is-present (any? (lambda (k) (= k key-to-add)) keys-so-far)))
+    (if key-is-present
+      pairs-so-far
+      (cons pair-to-add pairs-so-far)) ))
+
+  (reduce add-if-absent '() alist))
+
 ;; PREDICATES ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define (has-key? alist key)
@@ -87,6 +103,7 @@
 
   ; Getters
   get
+  pairs
 
   ; Predicates
   has-key?

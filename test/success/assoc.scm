@@ -15,6 +15,7 @@
 (display (assoc:get (assoc:add base-alist 'd 400) 'd)) (newline)
 (display (assoc:get (assoc:add base-alist 'b 201) 'd)) (newline)
 (display (assoc:get (assoc:add base-alist 'b 201) 'b)) (newline)
+(display (assoc:pairs base-alist)) (newline)
 
 (newline)
 
@@ -26,10 +27,12 @@
 (display (assoc:has-key? (assoc:add base-alist 'b 201) 'd)) (newline)
 (display (assoc:has-key? (assoc:add base-alist 'b 201) 'b)) (newline)
 
+
 (newline)
 
 (display (assoc:get (assoc:singleton 'a 100) 'a)) (newline)
 (display (assoc:get (assoc:singleton 'a 100) 'b)) (newline)
+(display (assoc:pairs (assoc:singleton 'a 100))) (newline)
 
 (newline)
 
@@ -47,3 +50,4 @@
 (display (assoc:get merged-alist 'aa)) (newline)
 (display (assoc:get merged-alist 'bb)) (newline)
 (display (assoc:get merged-alist 'd )) (newline)
+(display (assoc:pairs merged-alist)) (newline)
