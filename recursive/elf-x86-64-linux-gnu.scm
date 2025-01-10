@@ -106,11 +106,22 @@
 ;; @param code-bytes - the list of bytes comprising the code
 ;; @return the updated ELF file structure
 (define (add-executable-code elf id code-bytes)
-  (let ((code-length (length code-bytes)))
+  (define (compute-code-length)
+    (define (byte-size byte)
+      (if (data-ref? byte)
+        (data-ref-get-size byte)
+        1))
+
+    (reduce
+      (lambda (s byte) (+ s (byte-size byte)))
+      0
+      code-bytes) )
+
+  (let ((code-length (compute-code-length code-bytes)))
     (add-stubs
       elf
       (list
-        (new-stub-text id code-bytes)
+        (new-stub-text id code-bytes code-length)
         (new-stub-section-header-text id code-length)
         (new-stub-program-header-text id code-length))) ))
 
@@ -157,7 +168,7 @@
     (add-stubs
       elf
       (list
-        (new-stub-data 'data all-bytes)
+        (new-stub-data 'data all-bytes offsets)
         (new-stub-section-header-data 'data size)
         (new-stub-program-header-data 'data size))) ))
 
@@ -175,6 +186,19 @@
 (define EXECUTABLE-MEMORY-BASE-ADDRESS 0x400000)
 (define DATA-MEMORY-BASE-ADDRESS 0x800000)
 
+;; EXTERNAL DATA STRUCTURES ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(define (data-ref label size-in-bytes)
+  (list 'data-ref label size-in-bytes))
+
+(define (data-ref? val)
+  (and
+    (list? val)
+    (not (null? val))
+    (= (car val) 'data-ref)) )
+(define data-ref-get-label (compose car cdr))
+(define data-ref-get-size (compose car cdr cdr))
+
 ;; INTERNAL DATA STRUCTURES ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define elf->stubs (compose car cdr))
@@ -182,16 +206,18 @@
 (define stub->type car)
 (define stub->id (compose car cdr))
 (define text-stub->code-bytes (compose car cdr cdr))
+(define text-stub->size-in-bytes (compose car cdr cdr cdr))
 (define data-stub->bytes (compose car cdr cdr))
+(define data-stub->offsets-by-label (compose car cdr cdr cdr))
 (define shstrtab-stub->shstrtab (compose car cdr cdr))
 (define section-header-stub->type (compose car cdr cdr))
 (define header-stub->associated-section-id (compose car cdr cdr cdr))
 
-(define (new-stub-text id code-bytes)
-  (list 'stub-text id code-bytes))
+(define (new-stub-text id code-bytes size-in-bytes)
+  (list 'stub-text id code-bytes size-in-bytes))
 
-(define (new-stub-data id bytes)
-  (list 'stub-data id bytes))
+(define (new-stub-data id bytes offsets-by-label)
+  (list 'stub-data id bytes offsets-by-label))
 
 (define (new-stub-section-header-text associated-section-id size-in-bytes)
   ; TODO: remove magic numbers in favor of constants
@@ -270,6 +296,49 @@
 (define (new-stub-shstrtab shstrtab)
   (list 'stub-shstrtab 'shstrtab shstrtab))
 
+(define (text-stub->resolved-code-bytes stub laid-out-stubs)
+  (define (address-for-label laid-out-data-stub label)
+    (let* ((data-file-offset (laid-out-stub->offset laid-out-data-stub))
+           (base-address (file-offset->memory-address 'data data-file-offset))
+           (data-stub (laid-out-stub->data laid-out-data-stub))
+           (label-offset (data-stub->offset-for-label data-stub label)))
+      (+ base-address label-offset) ))
+
+  (define (unresolved-byte-to-resolved-bytes laid-out-data-stub byte)
+    (if (data-ref? byte)
+      (byte-utils:int->little-endian
+        (address-for-label laid-out-data-stub (data-ref-get-label byte))
+        (data-ref-get-size byte))
+      (list byte)) )
+
+  (define (resolve-data-refs laid-out-data-stub unresolved-bytes)
+    (reduce
+      (lambda (bytes byte)
+        (append
+          bytes
+          (unresolved-byte-to-resolved-bytes laid-out-data-stub byte)))
+      '()
+      (text-stub->code-bytes stub)) )
+
+
+  (let ((unresolved-bytes (text-stub->code-bytes stub)))
+    (if (any? (compose not number?) unresolved-bytes)
+      (resolve-data-refs
+        (find-laid-out-stub-of-type laid-out-stubs 'stub-data)
+        unresolved-bytes)
+      unresolved-bytes) ))
+
+(define (data-stub->offset-for-label stub label)
+  (let* ((offsets (data-stub->offsets-by-label stub))
+         (label-and-offset
+           (find (lambda (pair) (= (car pair) label)) offsets)))
+    (if (not label-and-offset)
+      (error-and-exit
+        "data-stub->offset-for-label: "
+        "Referenced label not found in data section: "
+        label)
+      (cdr label-and-offset)) ))
+
 (define (laid-out-stub type id data offset size)
   (list
     type
@@ -334,7 +403,7 @@
          (section-header-table
            (construct-section-header-table laid-out-stubs shstrtab))
          (program-header-table (construct-program-header-table laid-out-stubs))
-         (remaining-sections (construct-non-header-sections elf))
+         (remaining-sections (construct-non-header-sections laid-out-stubs))
          (header (construct-header laid-out-stubs)))
     ; Useful for debugging
     ; (display elf) (newline)
@@ -527,7 +596,7 @@
     (define (size-of-stub stub)
       (let ((stub-type (stub->type stub)))
         (cond
-          ((= stub-type 'stub-text) (length (text-stub->code-bytes stub)))
+          ((= stub-type 'stub-text) (text-stub->size-in-bytes stub))
           ((= stub-type 'stub-data) (length (data-stub->bytes stub)))
           ((= stub-type 'stub-shstrtab)
            ((shstrtab-stub->shstrtab stub) 'size-in-bytes))
@@ -677,15 +746,18 @@
            (laid-out-stub->data laid-out-program-headers-stub)))
     (process-stubs laid-out-stubs program-header-stubs) ))
 
-(define (construct-non-header-sections elf)
-  (define (stub->bytes stub)
-    (let ((stub-type (stub->type stub)))
+(define (construct-non-header-sections laid-out-stubs)
+  (define (laid-out-stub->bytes laid-out-stub)
+    (let ((stub-type (laid-out-stub->type laid-out-stub))
+          (stub (laid-out-stub->data laid-out-stub)))
       (cond
-        ((= stub-type 'stub-text) (text-stub->code-bytes stub))
+        ((= stub-type 'stub-text)
+         (text-stub->resolved-code-bytes stub laid-out-stubs))
+
         ((= stub-type 'stub-data) (data-stub->bytes stub))
         ((= stub-type 'stub-shstrtab) ((shstrtab-stub->shstrtab stub) 'bytes))
-        ((= stub-type 'stub-section-header) '())
-        ((= stub-type 'stub-program-header) '())
+        ((= stub-type 'stub-section-headers) '())
+        ((= stub-type 'stub-program-headers) '())
         (else
           (error-and-exit
             "stub->bytes: unknown stub type: "
@@ -695,10 +767,10 @@
     (if (null? stubs)
       '()
       (append
-        (stub->bytes (car stubs))
+        (laid-out-stub->bytes (car stubs))
         (process-stubs (cdr stubs))) ) )
 
-  (process-stubs (elf->stubs elf)) )
+  (process-stubs laid-out-stubs) )
 
 ;; EXPORTS ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -709,6 +781,9 @@
   ; Builder functions
   add-executable-code
   add-data
+
+  ; Data structures
+  data-ref
 
   ; Output
   emit-as-bytes)
