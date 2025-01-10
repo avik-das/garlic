@@ -104,6 +104,32 @@ garlic_value_t downcase(garlic_value_t str) {
     return garlic_wrap_string(result);
 }
 
+/* Converts a Garlic string into a list of integers representing the bytes that
+ * make up the string. The encoding is unspecified, and that's something that
+ * should be designed properly. For now, the assumption is that a string is
+ * somehow represented under the hood as an array of `char`s, and the numbers
+ * returned correspond to those `char`s.
+ *
+ * Includes the NULL terminator at the end. */
+garlic_value_t to_bytes(garlic_value_t str) {
+    if (garlic_get_type(str) != GARLIC_TYPE_STRING) {
+        error_and_exit("ERROR - string:to_bytes - value is not a string");
+    }
+
+    const char *cstr = garlic_unwrap_string(str);
+    size_t len = garlic_string_length(str);
+
+    garlic_value_t result = NIL_VALUE;
+
+    for (int i = len; i >= 0; i--) {
+      int64_t cbyte = cstr[i];
+      garlic_value_t garlic_byte = int_to_garlicval(cbyte);
+      result = garlic_make_cons(garlic_byte, result);
+    }
+
+    return result;
+}
+
 garlic_native_export_t string_exports[] = {
     {"null?", nullp, 1},
     {"concat", garlic_internal_string_concat, 0, 1},
@@ -113,5 +139,6 @@ garlic_native_export_t string_exports[] = {
     {"string=?", string_equalp, 2},
     {"at", character_at, 2},
     {"downcase", downcase, 1},
+    {"to-bytes", to_bytes, 1},
     0
 };

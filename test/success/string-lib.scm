@@ -43,3 +43,8 @@
 
 (display (str:null? "not-empty")) (newline)
 (display (str:null? "")) (newline)
+
+(newline)
+
+(display (str:to-bytes "abcd")) (newline)
+(display (str:to-bytes "1234\t\nabcd\\\"")) (newline)
