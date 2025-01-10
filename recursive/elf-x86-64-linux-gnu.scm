@@ -142,17 +142,18 @@
         (+ prev-size (length bytes))
         (assoc:add prev-offsets label prev-size)) ))
 
-  (define (compute-size-and-offsets)
-    (reduce state->next (state-empty) (assoc:pairs labels-and-bytes)) )
+  (define (compute-size-and-offsets labels-and-bytes-pairs)
+    (reduce state->next (state-empty) labels-and-bytes-pairs) )
 
-  (define (collate-bytes)
+  (define (collate-bytes labels-and-bytes-pairs)
     (reduce
       (lambda (bytes label-and-bytes) (append bytes (cdr label-and-bytes)))
       '()
-      labels-and-bytes) )
+      labels-and-bytes-pairs) )
 
-  (let (((size offsets) (compute-size-and-offsets))
-        (all-bytes (collate-bytes)))
+  (let* ((labels-and-bytes-pairs (assoc:pairs labels-and-bytes))
+         ((size offsets) (compute-size-and-offsets labels-and-bytes-pairs))
+         (all-bytes (collate-bytes labels-and-bytes-pairs)))
     (add-stubs
       elf
       (list
