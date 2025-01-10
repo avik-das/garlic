@@ -2,6 +2,7 @@
 ;; The scope of this module is reduced by assuming system configuration such as
 ;; x86-64 little-endian systems.
 
+(require assoc)
 (require file)
 (require string => str)
 (require "byte-utils" *)
@@ -94,7 +95,7 @@
 ;;   4. The entrypoint of the ELF file is set to wherever the above program
 ;;      header will place the code in memory.
 ;;
-;; Note all of these will be finalized immediately, as references between
+;; Not all of these will be finalized immediately, as references between
 ;; different parts of the file need to be finalized at the time of writing the
 ;; ELF file.
 ;;
@@ -111,7 +112,53 @@
       (list
         (new-stub-text id code-bytes)
         (new-stub-section-header-text id code-length)
-        (new-stub-program-header-loadable id code-length))) ))
+        (new-stub-program-header-text id code-length))) ))
+
+;; Add the given data (represented as an opaque list of bytes) into the ELF
+;; file as the data section that will be loaded into memory when the ELF file
+;; is run. This entails:
+;;
+;;   1. Ensuring the data is present in the final ELF file in a `.data` section.
+;;   2. There is a `.data` section header for this section.
+;;   3. There is a program header to ensure the data is loaded into memory.
+;;
+;; Not all of these will be finalized immediately, as references between
+;; different parts of the file need to be finalized at the time of writing the
+;; ELF file.
+;;
+;; @param elf - the in-progress ELF file structure
+;; @param bytes - the list of bytes comprising the data section
+;; @return the updated ELF file structure
+(define (add-data elf labels-and-bytes)
+  (define (state-new size offsets) (list size offsets))
+  (define (state-empty) (state-new 0 (assoc:empty)))
+
+  (define state->offsets (compose car cdr))
+
+  (define (state->next state label-and-bytes)
+    (let (((prev-size prev-offsets) state)
+          ((label . bytes) label-and-bytes))
+      (state-new
+        (+ prev-size (length bytes))
+        (assoc:add prev-offsets label prev-size)) ))
+
+  (define (compute-size-and-offsets)
+    (reduce state->next (state-empty) (assoc:pairs labels-and-bytes)) )
+
+  (define (collate-bytes)
+    (reduce
+      (lambda (bytes label-and-bytes) (append bytes (cdr label-and-bytes)))
+      '()
+      labels-and-bytes) )
+
+  (let (((size offsets) (compute-size-and-offsets))
+        (all-bytes (collate-bytes)))
+    (add-stubs
+      elf
+      (list
+        (new-stub-data 'data all-bytes)
+        (new-stub-section-header-data 'data size)
+        (new-stub-program-header-data 'data size))) ))
 
 ;; CONSTANTS ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -125,6 +172,7 @@
 (define SEGMENT-TYPE-LOADABLE 0x01)
 (define ADDRESS-ALIGNMENT 0x1000)
 (define EXECUTABLE-MEMORY-BASE-ADDRESS 0x400000)
+(define DATA-MEMORY-BASE-ADDRESS 0x800000)
 
 ;; INTERNAL DATA STRUCTURES ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -133,12 +181,16 @@
 (define stub->type car)
 (define stub->id (compose car cdr))
 (define text-stub->code-bytes (compose car cdr cdr))
+(define data-stub->bytes (compose car cdr cdr))
 (define shstrtab-stub->shstrtab (compose car cdr cdr))
 (define section-header-stub->type (compose car cdr cdr))
 (define header-stub->associated-section-id (compose car cdr cdr cdr))
 
 (define (new-stub-text id code-bytes)
   (list 'stub-text id code-bytes))
+
+(define (new-stub-data id bytes)
+  (list 'stub-data id bytes))
 
 (define (new-stub-section-header-text associated-section-id size-in-bytes)
   ; TODO: remove magic numbers in favor of constants
@@ -157,6 +209,23 @@
     ADDRESS-ALIGNMENT
     0x00)) ; Text section is not a table, no entry size
 
+(define (new-stub-section-header-data associated-section-id size-in-bytes)
+  ; TODO: remove magic numbers in favor of constants
+  (list
+    'stub-section-header
+    'no-id
+    'data
+    associated-section-id
+    SECTION-TYPE-PROGBITS
+    0x03 ; Allocatable + writeable
+    'placeholder-address
+    'placeholder-offset
+    size-in-bytes ; Section size
+    0x00 ; Link, none because of static binary
+    0x00 ; No extra information
+    ADDRESS-ALIGNMENT
+    0x00)) ; Data section is not a table, no entry size
+
 (define (new-stub-section-header-shstrtab shstrtab)
   (list
     'stub-section-header
@@ -173,14 +242,27 @@
     0x00 ; No address alignment
     0x00)) ; Text section is not a table, no entry size
 
-(define (new-stub-program-header-loadable associated-section-id size-in-bytes)
+(define (new-stub-program-header-text associated-section-id size-in-bytes)
   ; TODO: remove magic numbers in favor of constants
   (list
     'stub-program-header
     'no-id
+    'text
     associated-section-id
     SEGMENT-TYPE-LOADABLE
     0x05 ; flags: readable + executable
+    size-in-bytes
+    ADDRESS-ALIGNMENT))
+
+(define (new-stub-program-header-data associated-section-id size-in-bytes)
+  ; TODO: remove magic numbers in favor of constants
+  (list
+    'stub-program-header
+    'no-id
+    'data
+    associated-section-id
+    SEGMENT-TYPE-LOADABLE
+    0x06 ; flags: readable + writeable
     size-in-bytes
     ADDRESS-ALIGNMENT))
 
@@ -217,15 +299,24 @@
 
 ;; STUBS -> ELF DATA STRUCTURES ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(define (file-offset->executable-memory-address file-offset)
-  (+ EXECUTABLE-MEMORY-BASE-ADDRESS file-offset))
+(define (file-offset->memory-address section-type file-offset)
+  (+
+    file-offset
+    (cond
+      ((= section-type 'text) EXECUTABLE-MEMORY-BASE-ADDRESS)
+      ((= section-type 'data) DATA-MEMORY-BASE-ADDRESS)
+      (else
+        (error-and-exit
+          "file-offset->memory-address: unknown section-type: "
+          section-type))) ))
 
-(define (file-offset->executable-memory-address-if-placeholder
+(define (file-offset->memory-address-if-placeholder
+          section-type
           given-memory-address
           file-offset)
   (if (number? given-memory-address)
     given-memory-address
-    (file-offset->executable-memory-address file-offset) ))
+    (file-offset->memory-address section-type file-offset) ))
 
 ;; OUTPUT ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -271,7 +362,8 @@
           (find-laid-out-stub-of-type laid-out-stubs 'stub-program-headers))
 
         (entrypoint
-          (file-offset->executable-memory-address
+          (file-offset->memory-address
+            'text
             (laid-out-stub->offset
               (laid-out-stub-with-id laid-out-stubs 'main)))) )
     (append
@@ -322,7 +414,13 @@
     (let ((type (stub->type stub)))
       (cond
         ((= type 'stub-text) (cons 'text ".text"))
-        (else '())) ))
+        ((= type 'stub-data) (cons 'data ".data"))
+        ((= type 'stub-section-header) '())
+        ((= type 'stub-program-header) '())
+        (else
+          (error-and-exit
+            "stub->header-name: unknown stub type: "
+            type))) ))
 
   (define (stubs->header-names stubs)
     (filter
@@ -429,11 +527,12 @@
       (let ((stub-type (stub->type stub)))
         (cond
           ((= stub-type 'stub-text) (length (text-stub->code-bytes stub)))
+          ((= stub-type 'stub-data) (length (data-stub->bytes stub)))
           ((= stub-type 'stub-shstrtab)
            ((shstrtab-stub->shstrtab stub) 'size-in-bytes))
           (else
             (error-and-exit
-              "size-of-stub: unknown stub type"
+              "size-of-stub: unknown stub type: "
               stub-type)) )))
 
     (define (helper remaining-stubs last-stub-so-far)
@@ -491,7 +590,8 @@
                (laid-out-stub-with-id laid-out-stubs associated-section-id)))
 
            (resolved-memory-address
-             (file-offset->executable-memory-address-if-placeholder
+             (file-offset->memory-address-if-placeholder
+               section-type
                potential-memory-address
                associated-section-offset)) )
       (append
@@ -530,6 +630,7 @@
   (define (program-header-stub->bytes laid-out-stubs stub)
     (let* (((stub-type
               id
+              associated-section-type
               associated-section-id
               segment-type-bits
               flags
@@ -542,7 +643,9 @@
                (laid-out-stub-with-id laid-out-stubs associated-section-id)))
 
            (memory-address
-             (file-offset->executable-memory-address associated-section-offset)))
+             (file-offset->memory-address
+               associated-section-type
+               associated-section-offset)))
       (append
         (int->little-endian segment-type-bits 4)
         (int->little-endian flags 4)
@@ -578,8 +681,14 @@
     (let ((stub-type (stub->type stub)))
       (cond
         ((= stub-type 'stub-text) (text-stub->code-bytes stub))
+        ((= stub-type 'stub-data) (data-stub->bytes stub))
         ((= stub-type 'stub-shstrtab) ((shstrtab-stub->shstrtab stub) 'bytes))
-        (else '()) )))
+        ((= stub-type 'stub-section-header) '())
+        ((= stub-type 'stub-program-header) '())
+        (else
+          (error-and-exit
+            "stub->bytes: unknown stub type: "
+            stub-type)) )))
 
   (define (process-stubs stubs)
     (if (null? stubs)
@@ -598,6 +707,7 @@
 
   ; Builder functions
   add-executable-code
+  add-data
 
   ; Output
   emit-as-bytes)
