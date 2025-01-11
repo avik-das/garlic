@@ -408,7 +408,7 @@
     ; Useful for debugging
     ; (display elf) (newline)
     ; (display laid-out-stubs) (newline)
-    (append
+    (append-in-place
       header
       section-header-table
       program-header-table

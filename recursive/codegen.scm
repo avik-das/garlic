@@ -1,5 +1,7 @@
 (require assoc)
 (require file)
+(require rand)
+(require string => str)
 
 (require "ast")
 (require "byte-utils" *)
@@ -103,6 +105,29 @@
     (cg-code
       ; Booleans are represented as tagged pointers
       (opcode-mov-imm32 (if (ast:bool-get-value bool) 2 4))) ))
+
+(define (codegen-str str)
+  (let* ((label (rand:rand-atom))
+         (val (ast:str-get-value str))
+         (len-bytes (byte-utils:int->little-endian (str:length val) 4)))
+    (result:new-success
+      (cg-new
+        ; TODO: wrap + load pointer. The main blocker is there is no standard
+        ;   runtime, so there is no easy way to create a wrapped Garlic string.
+        ;   (It is possible to add in a bunch of duplicated code inline, but
+        ;   figuring out the runtime story will be important in general.)
+        ;
+        ;   For now, immediately print out the string, as there isn't a
+        ;   meaningful way to return that value on the command line.
+        (append-in-place
+          (list
+            0xb8 0x01 0x00 0x00 0x00    ; mov  $1, %eax
+            0xbf 0x01 0x00 0x00 0x00    ; mov  $1, %edi
+            0xbe (elf:data-ref label 4) ; mov  $<label>, %esi
+            0xba) len-bytes             ; mov  $<length>, %edx
+          '(0x0f 0x05                   ; syscall
+            0xb8 0x00 0x00 0x00 0x00))  ; mov  $0, %eax
+        (assoc:singleton label (str:to-bytes val)) )) ))
 
 (define (codegen-conditional conditional)
   ; SAMPLE GARLIC CODE:
@@ -257,6 +282,7 @@
     (cond
       ((ast:int? statement) (codegen-int statement))
       ((ast:bool? statement) (codegen-bool statement))
+      ((ast:str? statement) (codegen-str statement))
       ((ast:quoted-list? statement) (codegen-quoted-list statement))
       ((ast:conditional? statement) (codegen-conditional statement))
       (else
@@ -307,6 +333,7 @@
            ; must have been successful.
            (lambda (b) (file:write-bytes filename b))
            (lambda (e) (elf:emit-as-bytes e))
+           (lambda (e) (elf:add-data e (cg-get-data cg)))
            (lambda (e) (elf:add-executable-code e 'main (cg-get-code cg))))
          (elf:empty-static-executable)))
       cg-result) ))
