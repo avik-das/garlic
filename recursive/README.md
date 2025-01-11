@@ -43,20 +43,6 @@ make
 diff out.txt test.scm.result  # Ensure the output is correct
 ```
 
-### Standalone ELF file generation
-
-I'm also working on a small library for generating ELF files. You can run a demo of the library as follows:
-
-```sh
-# From inside the "recursive" directory
-
-../garlic -o generate-elf generate-elf.scm
-./generate-elf
-chmod +x generated-elf
-./generated-elf
-echo $?  # Should print "42"
-```
-
 Why?
 ----
 
