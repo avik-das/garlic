@@ -14,6 +14,14 @@ static garlic_value_t nullp(garlic_value_t str) {
     return garlic_string_length(str) == 0 ?  TRUE_VALUE : FALSE_VALUE;
 }
 
+static garlic_value_t length(garlic_value_t str) {
+    if (garlic_get_type(str) != GARLIC_TYPE_STRING) {
+        error_and_exit("ERROR - string:length - value is not a string");
+    }
+
+    return int_to_garlicval(garlic_string_length(str));
+}
+
 garlic_value_t concat_list(garlic_value_t list) {
     if (list != NIL_VALUE &&
             garlic_get_type(list) != GARLIC_TYPE_CONS) {
@@ -132,6 +140,7 @@ garlic_value_t to_bytes(garlic_value_t str) {
 
 garlic_native_export_t string_exports[] = {
     {"null?", nullp, 1},
+    {"length", length, 1},
     {"concat", garlic_internal_string_concat, 0, 1},
     {"concat-list", concat_list, 1},
     {"string-tail", string_tail, 2},
