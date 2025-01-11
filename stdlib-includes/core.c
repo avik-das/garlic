@@ -439,6 +439,7 @@ garlic_native_export_t core_exports[] = {
     {"cons", garlic_make_cons, 2},
     {"car", garlic_car, 1},
     {"cdr", garlic_cdr, 1},
+    {"append-in-place", garlic_internal_append_in_place, 2, 1},
 
     {"+", sum, 0, 1},
     {"-", difference, 0, 1},

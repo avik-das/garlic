@@ -344,6 +344,90 @@ garlic_value_t garlic_cdr(garlic_value_t cons_val) {
     return ((struct garlic_cons *) cons_val)->cdr;
 }
 
+/* Append the given lists, in the order given. Mutates all but the last list.
+ * Generally, Garlic functions don't generally mutate their arguments, but this
+ * function is needed for performance reasons. Be very careful not to use this
+ * the original lists after call this function.
+ *
+ * @param l1 - the first list to append
+ * @param l2 - the second list to append
+ * @param others - any other lists to append, may be empty
+ * @return `l1`, but now it's been mutated to include `l2` and the other lists
+ *         afterwards
+ */
+garlic_value_t garlic_internal_append_in_place(
+    garlic_value_t l1,
+    garlic_value_t l2,
+    garlic_value_t others) {
+  if (l1 != NIL_VALUE && garlic_get_type(l1) != GARLIC_TYPE_CONS) {
+    error_and_exit("append-in-place: l1 is not a list");
+  }
+
+  if (l2 != NIL_VALUE && garlic_get_type(l2) != GARLIC_TYPE_CONS) {
+    error_and_exit("append-in-place: l2 is not a list");
+  }
+
+  // Assume the runtime has ensured `others` is a list.
+  garlic_value_t others_for_checking = others;
+  while (others_for_checking != NIL_VALUE) {
+    garlic_value_t other_for_checking = garlic_car(others_for_checking);
+    others_for_checking = garlic_cdr(others_for_checking);
+
+    if (other_for_checking != NIL_VALUE &&
+        garlic_get_type(other_for_checking) != GARLIC_TYPE_CONS) {
+      error_and_exit("append-in-place: additional param is not a list");
+    }
+  }
+
+  garlic_value_t to_return = l1;
+
+  garlic_value_t ptr = l1;
+  garlic_value_t last = NIL_VALUE;
+  while (ptr != NIL_VALUE) {
+    last = ptr;
+    ptr = garlic_cdr(ptr);
+  }
+
+  if (to_return == NIL_VALUE) { to_return = l2; }
+
+  if (l2 != NIL_VALUE) {
+    if (last != NIL_VALUE) {
+      ((struct garlic_cons *) last)->cdr = l2;
+    }
+
+    ptr = l2;
+    while (ptr != NIL_VALUE) {
+      last = ptr;
+      ptr = garlic_cdr(ptr);
+    }
+  }
+
+  garlic_value_t othersptr = others;
+  while (othersptr != NIL_VALUE) {
+    garlic_value_t ptr = garlic_car(othersptr);
+    othersptr = garlic_cdr(othersptr);
+
+    if (to_return == NIL_VALUE) { to_return = ptr; }
+
+    if (ptr != NIL_VALUE) {
+      if (last != NIL_VALUE) {
+        ((struct garlic_cons *) last)->cdr = ptr;
+      }
+
+      while (ptr != NIL_VALUE) {
+        last = ptr;
+        ptr = garlic_cdr(ptr);
+      }
+    }
+  }
+
+  if (to_return == NIL_VALUE) {
+    return NIL_VALUE;
+  }
+
+  return to_return;
+}
+
 enum garlic_value_type garlic_get_type(garlic_value_t val) {
     if (val == NIL_VALUE) {
         return GARLIC_TYPE_NIL;
