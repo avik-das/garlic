@@ -69,7 +69,9 @@
 ;; CONSTRUCTORS ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define (empty-static-executable)
-  (new-elf '()))
+  (add-stub
+    (new-elf '())
+    (new-stub-section-header-null)) )
 
 (define (new-elf stubs)
   (list 'elf stubs))
@@ -218,6 +220,22 @@
 
 (define (new-stub-data id bytes offsets-by-label)
   (list 'stub-data id bytes offsets-by-label))
+
+(define (new-stub-section-header-null)
+  (list
+    'stub-section-header
+    'no-id
+    'null
+    'null
+    0x00
+    0x00
+    0x00
+    0x00
+    0x00
+    0x00
+    0x00
+    0x00
+    0x00))
 
 (define (new-stub-section-header-text associated-section-id size-in-bytes)
   ; TODO: remove magic numbers in favor of constants
@@ -514,6 +532,18 @@
   (define (lookup-table-instance name-and-bytes-pairs)
     (define (offset-from-lookup-table pairs offset-so-far name)
       (cond
+        ; The null section header is special in that it has a constant. Note
+        ; that we could have artificially inserted an entry for the null section
+        ; header into the table, but that would introduce problems when
+        ; converting the table into bytes: if the null section header is not
+        ; present, we would still need to introduce a NULL byte at the begining
+        ; of the serialized output.
+        ;
+        ; Instead, always introduce a NULL byte at the beginning of the
+        ; serialized output, and hardcode the offset for the null section
+        ; header's name as that first byte.
+        ((= name 'null) 0)
+
         ((null? pairs)
          (error-and-exit
            "Could not find section header name in table: "
@@ -656,8 +686,14 @@
            (offset-in-shstrtab (shstrtab 'offset-for-name (list section-type)))
 
            (associated-section-offset
-             (laid-out-stub->offset
-               (laid-out-stub-with-id laid-out-stubs associated-section-id)))
+             ; The null section header is special in that it has no associated
+             ; section. The memory address is not a placeholder in the section
+             ; header stub anyway, so it's okay to just default this offset to
+             ; zero.
+             (if (= section-type 'null)
+               0
+               (laid-out-stub->offset
+                 (laid-out-stub-with-id laid-out-stubs associated-section-id))))
 
            (resolved-memory-address
              (file-offset->memory-address-if-placeholder
