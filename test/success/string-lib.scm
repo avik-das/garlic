@@ -51,8 +51,3 @@
 (display (str:length "ab")) (newline)
 (display (str:length "abc")) (newline)
 (display (str:length "abcd")) (newline)
-
-(newline)
-
-(display (str:to-bytes "abcd")) (newline)
-(display (str:to-bytes "1234\t\nabcd\\\"")) (newline)

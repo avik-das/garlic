@@ -4,7 +4,8 @@
 (require string => str)
 
 (require "ast")
-(require "byte-utils" *)
+(require "byte-utils")
+(require "string-utils")
 (require "compiler-error" => err)
 (require "elf-x86-64-linux-gnu" => elf)
 (require "label-resolution")
@@ -64,8 +65,8 @@
 ; TODO: specify register somehow
 (define (opcode-mov-imm32 val)
   (append
-    '(0x48 0xc7 0xc0)             ; mov <immediate>, %rax
-    (int->little-endian val 4) )) ;     <immediate>
+    '(0x48 0xc7 0xc0)                        ; mov <immediate>, %rax
+    (byte-utils:int->little-endian val 4) )) ;     <immediate>
 
 ; TODO: specify register somehow
 (define (opcode-cmp-imm8 val)
@@ -127,7 +128,7 @@
             0xba) len-bytes             ; mov  $<length>, %edx
           '(0x0f 0x05                   ; syscall
             0xb8 0x00 0x00 0x00 0x00))  ; mov  $0, %eax
-        (assoc:singleton label (str:to-bytes val)) )) ))
+        (assoc:singleton label (string-utils:ascii-string-to-bytes val)) )) ))
 
 (define (codegen-conditional conditional)
   ; SAMPLE GARLIC CODE:
