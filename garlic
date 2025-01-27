@@ -43,46 +43,56 @@ class GarlicParser < Parslet::Parser
   }
 
   rule(:list)      {
-    str('(') >>
-      space? >>
-      # Make sure to use .repeat(0, 1) instead of .maybe, since we always want
-      # a list in the parse tree, regardless of whether it matched one sub-
-      # expression or more.
-      (expr >> (space >> expr).repeat(1).maybe).repeat(0, 1).as(:list) >>
-      space? >>
-      str(')')
+    (
+      str('(').as(:start) >>
+        space? >>
+        # Make sure to use .repeat(0, 1) instead of .maybe, since we always want
+        # a list in the parse tree, regardless of whether it matched one sub-
+        # expression or more.
+        (expr >> (space >> expr).repeat(1).maybe).repeat(0, 1).as(:items) >>
+        space? >>
+        str(')')
+    ).as(:list)
   }
 
   rule(:dotlist)   {
-    str('(') >>
-      space? >>
-      # Make sure to use .repeat(0, 1) instead of .maybe, since we always want
-      # a list in the parse tree, regardless of whether it matched one sub-
-      # expression or more.
-      (
-        (expr >> (space >> expr).repeat(1).maybe).repeat(0, 1) >>
-        space >> str('.') >> space >>
-        expr
-      ).as(:dotlist) >>
-      space? >>
-      str(')')
+    (
+      str('(').as(:start) >>
+        space? >>
+        # Make sure to use .repeat(0, 1) instead of .maybe, since we always want
+        # a list in the parse tree, regardless of whether it matched one sub-
+        # expression or more.
+        (
+          (expr >> (space >> expr).repeat(1).maybe).repeat(0, 1) >>
+          space >> str('.') >> space >>
+          expr
+        ).as(:items) >>
+        space? >>
+        str(')')
+    ).as(:dotlist)
   }
 
   rule(:quoted)     {
-    str('\'') >> (atom | dotlist | list).as(:quoted)
+    (str('\'').as(:start) >> (atom | dotlist | list).as(:quoted)).as(:quoted)
   }
 
   rule(:string)     {
-    str('"') >>
-      (
-        (str('\\') >> any) |
-        (str('"').absent? >> any)
-      ).repeat(1).maybe.as(:string) >>
-      str('"')
+    (
+      str('"').as(:start) >>
+        (
+          (str('\\') >> any) |
+          (str('"').absent? >> any)
+        ).repeat(1).maybe.as(:contents) >>
+        str('"')
+    ).as(:string)
   }
 
   rule(:comment)    {
-    str(';') >> match('[^\n]').repeat(1).maybe.as(:comment) >> str("\n")
+    (
+      str(';').as(:start) >>
+        match('[^\n]').repeat(1).maybe.as(:contents) >>
+        str("\n")
+    ).as(:comment)
   }
 
   rule(:atom)      { float | hex | int | bool | var }
@@ -177,9 +187,10 @@ module AST
         # (require stdlib *)
         @statements.unshift(
           NestedNode.new(
-            Var.new(:require),
-            Var.new(:stdlib),
-            Var.new(:*)
+            Position.new(filename, -2, 1),
+            Var.new(Position.new(filename, -2, 2), :require),
+            Var.new(Position.new(filename, -2, 10), :stdlib),
+            Var.new(Position.new(filename, -2, 18), :*)
           )
         )
       end
@@ -190,9 +201,10 @@ module AST
       # (require core *)
       @statements.unshift(
         NestedNode.new(
-          Var.new(:require),
-          Var.new(:core),
-          Var.new(:*)
+          Position.new(filename, -1, 1),
+          Var.new(Position.new(filename, -1, 2), :require),
+          Var.new(Position.new(filename, -1, 10), :core),
+          Var.new(Position.new(filename, -1, 15), :*)
         )
       )
 
@@ -401,6 +413,10 @@ module AST
   end
 
   class Node
+    def initialize(pos)
+      @pos = pos
+    end
+
     def has_children?
       false
     end
@@ -430,10 +446,12 @@ module AST
     end
 
     attr_accessor :names_in_scope
+    attr_reader :pos
   end
 
   class Comment < Node
-    def initialize(text)
+    def initialize(pos, text)
+      super(pos)
       @text = text
     end
 
@@ -445,7 +463,8 @@ module AST
   end
 
   class Quoted < Node
-    def initialize(value)
+    def initialize(pos, value)
+      super(pos)
       @value = value
     end
 
@@ -465,7 +484,8 @@ module AST
   end
 
   class String < Node
-    def initialize(contents)
+    def initialize(pos, contents)
+      super(pos)
       @contents = contents
     end
 
@@ -477,7 +497,8 @@ module AST
   end
 
   class QuotedAtom < Node
-    def initialize(name)
+    def initialize(pos, name)
+      super(pos)
       @name = name
     end
 
@@ -489,7 +510,8 @@ module AST
   end
 
   class QuotedList < Node
-    def initialize(is_nil_terminated, children)
+    def initialize(pos, is_nil_terminated, children)
+      super(pos)
       @is_nil_terminated = is_nil_terminated
       @children = children
     end
@@ -515,15 +537,14 @@ module AST
   end
 
   class Nil < Node
-    include Singleton
-
     def to_s
       "'()"
     end
   end
 
   class Var < Node
-    def initialize(name)
+    def initialize(pos, name)
+      super(pos)
       @name = name
     end
 
@@ -532,7 +553,7 @@ module AST
     end
 
     def specialized_quoted
-      QuotedAtom.new(@name)
+      QuotedAtom.new(pos, @name)
     end
 
     def can_be_used_as_binding?
@@ -543,7 +564,8 @@ module AST
   end
 
   class IntVal < Node
-    def initialize(value)
+    def initialize(pos, value)
+      super(pos)
       @value = value
     end
 
@@ -559,7 +581,8 @@ module AST
   end
 
   class FloatVal < Node
-    def initialize(value)
+    def initialize(pos, value)
+      super(pos)
       @value = value
     end
 
@@ -575,8 +598,6 @@ module AST
   end
 
   class TrueVal < Node
-    include Singleton
-
     def to_s
       "#t"
     end
@@ -587,8 +608,6 @@ module AST
   end
 
   class FalseVal < Node
-    include Singleton
-
     def to_s
       "#f"
     end
@@ -605,7 +624,8 @@ module AST
   end
 
   class NestedNode < Node
-    def initialize(*children)
+    def initialize(pos, *children)
+      super(pos)
       @children = children
     end
 
@@ -637,25 +657,25 @@ module AST
             when :'module-export'
               raise ParseException.new("module-export found in nested scope")
             when :define
-              Definition.new(*filtered_children)
+              Definition.new(pos, *filtered_children)
             when :lambda
-              Lambda.new(*filtered_children)
+              Lambda.new(pos, *filtered_children)
             when :begin
-              Begin.new(*filtered_children)
+              Begin.new(pos, *filtered_children)
             when :if
-              If.new(*filtered_children)
+              If.new(pos, *filtered_children)
             when :cond
-              Cond.new(*filtered_children)
+              Cond.new(pos, *filtered_children)
             when :and
-              And.new(*filtered_children)
+              And.new(pos, *filtered_children)
             when :or
-              Or.new(*filtered_children)
+              Or.new(pos, *filtered_children)
             when :let
-              Let.new(:bare, *filtered_children)
+              Let.new(pos, :bare, *filtered_children)
             when :'let*'
-              Let.new(:star, *filtered_children)
+              Let.new(pos, :star, *filtered_children)
             when :letrec
-              Let.new(:rec, *filtered_children)
+              Let.new(pos, :rec, *filtered_children)
             else
               as_function_call(filtered_children)
             end
@@ -668,15 +688,15 @@ module AST
     end
 
     def as_function_call(filtered_children)
-      FunctionCall.new(*filtered_children)
+      FunctionCall.new(pos, *filtered_children)
     end
 
     def specialized_quoted
       if @children.empty?
-        Nil.instance
+        Nil.new(pos)
       else
         quoted_children = @children.map(&:specialized_quoted)
-        QuotedList.new(false, quoted_children)
+        QuotedList.new(pos, false, quoted_children)
       end
     end
 
@@ -704,7 +724,8 @@ module AST
   end
 
   class DottedList < NestedNode
-    def initialize(*children)
+    def initialize(pos, *children)
+      super(pos)
       @children = children
     end
 
@@ -726,7 +747,7 @@ module AST
 
     def specialized_quoted
       quoted_children = @children.map(&:specialized_quoted)
-      QuotedList.new(true, quoted_children)
+      QuotedList.new(pos, true, quoted_children)
     end
 
     def internal_color
@@ -753,14 +774,9 @@ module AST
     attr :children
   end
 
-  class SpecializedNode < Node
-    def has_children?
-      true
-    end
-  end
-
   class Definition < SpecializedNode
-    def initialize(*children)
+    def initialize(pos, *children)
+      super(pos)
       @children = children
     end
 
@@ -793,12 +809,13 @@ module AST
 
         params_array = signature.drop(1)
         if @children[1].is_a?(DottedList)
-          params = DottedList.new(*params_array)
+          params = DottedList.new(pos, *params_array)
         else
-          params = NestedNode.new(*params_array)
+          params = NestedNode.new(pos, *params_array)
         end
 
         @value = Lambda.new(
+          pos,
           :lambda,
           params,
           *@children.drop(2)
@@ -834,7 +851,8 @@ module AST
   class Lambda < SpecializedNode
     include CommonTransformations
 
-    def initialize(*children)
+    def initialize(pos, *children)
+      super(pos)
       @children = children
     end
 
@@ -918,7 +936,8 @@ module AST
   end
 
   class Begin < SpecializedNode
-    def initialize(*children)
+    def initialize(pos, *children)
+      super(pos)
       @expressions = children.drop(1)
     end
 
@@ -954,7 +973,8 @@ module AST
   end
 
   class FunctionCall < SpecializedNode
-    def initialize(*children)
+    def initialize(pos, *children)
+      super(pos)
       @func = children.first
       @args = children[1, children.size - 1]
     end
@@ -993,7 +1013,8 @@ module AST
   end
 
   class If < SpecializedNode
-    def initialize(*children)
+    def initialize(pos, *children)
+      super(pos)
       @children = children
     end
 
@@ -1032,7 +1053,8 @@ module AST
   end
 
   class Cond < SpecializedNode
-    def initialize(*children)
+    def initialize(pos, *children)
+      super(pos)
       @children = children
     end
 
@@ -1068,9 +1090,10 @@ module AST
               "Else condition must be be last condition")
           end
 
-          CondElse.new(expressions)
+          CondElse.new(pos, expressions)
         else
           CondCondition.new(
+            pos,
             test.static_transformed,
             expressions
           )
@@ -1078,7 +1101,7 @@ module AST
       }
 
       if !@conditions.last.is_a?(CondElse)
-        @conditions << CondElse.new([Nil.instance])
+        @conditions << CondElse.new(pos, [Nil.new(pos)])
       end
 
       self
@@ -1096,7 +1119,8 @@ module AST
   end
 
   class CondCondition < SpecializedNode
-    def initialize(test, expressions)
+    def initialize(pos, test, expressions)
+      super(pos)
       @test = test
       @expressions = expressions
     end
@@ -1114,7 +1138,8 @@ module AST
   end
 
   class CondElse < SpecializedNode
-    def initialize(expressions)
+    def initialize(pos, expressions)
+      super(pos)
       @expressions = expressions
     end
 
@@ -1130,7 +1155,8 @@ module AST
   end
 
   class And < SpecializedNode
-    def initialize(*children)
+    def initialize(pos, *children)
+      super(pos)
       @children = children
     end
 
@@ -1158,7 +1184,8 @@ module AST
   end
 
   class Or < SpecializedNode
-    def initialize(*children)
+    def initialize(pos, *children)
+      super(pos)
       @children = children
     end
 
@@ -1188,7 +1215,8 @@ module AST
   class Let < SpecializedNode
     include CommonTransformations
 
-    def initialize(let_type, *children)
+    def initialize(pos, let_type, *children)
+      super(pos)
       @let_type = let_type
       @children = children
     end
@@ -1229,7 +1257,7 @@ module AST
 
           name = children[0]
           value = children[1].static_transformed
-          LetBinding.new(name, value)
+          LetBinding.new(pos, name, value)
         }
 
       @expressions = @children.drop(2).map(&:static_transformed)
@@ -1312,7 +1340,8 @@ module AST
   end
 
   class LetBinding < SpecializedNode
-    def initialize(name, value)
+    def initialize(pos, name, value)
+      super(pos)
       @name = name
       @value = value
     end
@@ -1327,26 +1356,75 @@ module AST
     attr :name, :value
   end
 
+  class Position
+    def initialize(filename, line, col)
+      @filename = filename
+      @line = line
+      @col = col
+    end
+
+    def to_s
+      "#{filename}#{to_s_within_file}"
+    end
+
+    def to_s_within_file
+      "@L#{@line}C#{@col}"
+    end
+
+    attr_reader :filename, :line, :col
+  end
+
   class ASTTransform < Parslet::Transform
-    rule(var: simple(:name))    { Var.new(name.to_s.intern) }
-    rule(hex: simple(:value))   { IntVal.new(value.to_s.to_i(16)) }
-    rule(int: simple(:value))   { IntVal.new(value.to_i) }
-    rule(float: simple(:value)) { FloatVal.new(value.to_f) }
-    rule(true: simple(:x))      { TrueVal.instance }
-    rule(false: simple(:x))     { FalseVal.instance }
+    class Parslet::Slice
+      def garlic_position(filename)
+        Position.new(filename, *line_and_column)
+      end
+    end
 
-    rule(list: sequence(:x))    { NestedNode.new(*x) }
-    rule(dotlist: sequence(:x)) { DottedList.new(*x) }
+    rule(var: simple(:name)) {
+      Var.new(name.garlic_position(filename), name.to_s.intern)
+    }
 
-    rule(quoted: simple(:q))    { Quoted.new(q) }
-    rule(string: simple(:s))    { String.new(s) }
+    rule(hex: simple(:value)) {
+      IntVal.new(value.garlic_position(filename), value.to_s.to_i(16))
+    }
 
-    rule(comment: simple(:c))   { Comment.new(c) }
-    rule(exprs: sequence(:x))   { GarlicModule.new(*x) }
+    rule(int: simple(:value)) {
+      IntVal.new(value.garlic_position(filename), value.to_i)
+    }
+
+    rule(float: simple(:value)) {
+      FloatVal.new(value.garlic_position(filename), value.to_f)
+    }
+
+    rule(true: simple(:x))      { TrueVal.new(x.garlic_position(filename)) }
+    rule(false: simple(:x))     { FalseVal.new(x.garlic_position(filename)) }
+
+    rule(list: { start: simple(:start), items: sequence(:xs) }) {
+      NestedNode.new(start.garlic_position(filename), *xs)
+    }
+
+    rule(dotlist: { start: simple(:start), items: sequence(:xs) }) {
+      DottedList.new(start.garlic_position(filename), *xs)
+    }
+
+    rule(quoted: { start: simple(:start), quoted: simple(:q) }) {
+      Quoted.new(start.garlic_position(filename), q)
+    }
+
+    rule(string: { start: simple(:start), contents: simple(:s) }) {
+      String.new(start.garlic_position(filename), s)
+    }
+
+    rule(comment: { start: simple(:start), contents: simple(:c) }) {
+      Comment.new(start.garlic_position(filename), c)
+    }
+
+    rule(exprs: sequence(:x)) { GarlicModule.new(*x) }
   end
 
   def AST.construct_from_parse_tree(tree, filename, included_modules)
-    ast = ASTTransform.new.apply(tree)
+    ast = ASTTransform.new.apply(tree, filename: filename)
     ast.filename = filename
     ast = ast.static_transformed(included_modules)
   end
@@ -1627,7 +1705,7 @@ module AST
   class String < Node
     def codegen(vm, program, all_modules)
       name = vm.addstring(@contents)
-      vm.movlabelreg "#{name}_contents", "%rdi"
+      vm.movlabelreg "#{name}_contents", "%rdi  # #{pos.to_s_within_file}"
 
       vm.with_aligned_stack do
         vm.call "garlic_wrap_string"
@@ -1637,7 +1715,7 @@ module AST
 
   class Nil < Node
     def codegen(vm, program, all_modules)
-      vm.asm "        mov     $0, %rax"
+      vm.asm "        mov     $0, %rax  # #{pos.to_s_within_file}"
     end
   end
 
@@ -1703,13 +1781,13 @@ module AST
           load_external_symbol(vm, name, module_prefix)
         else
           raise ProgramModule::CompileException.new(
-            "undefined variable referenced: #{name}")
+            "undefined variable referenced: \"#{name}\" at #{pos}")
         end
       end
     end
 
     def load_external_symbol(vm, symbol_name, module_prefix)
-      varname = vm.addvarname(Var.new(symbol_name))
+      varname = vm.addvarname(Var.new(pos, symbol_name))
       vm.movlabelreg varname, "%rdi"
 
       vm.with_aligned_stack do
@@ -1723,7 +1801,7 @@ module AST
     def codegen(vm, program, all_modules)
       # TODO: large numbers
       val = (@value << 1) | 0x1
-      vm.asm "        mov     $#{val}, %rax"
+      vm.asm "        mov     $#{val}, %rax  # #{pos.to_s_within_file}"
     end
   end
 
@@ -1740,7 +1818,7 @@ module AST
         # load it in one instruction.
 
         bitstring = [@value].pack('G').unpack('H16').first
-        vm.asm "        mov     $0x#{bitstring}, %rax"
+        vm.asm "        mov     $0x#{bitstring}, %rax  # #{pos.to_s_within_file}"
         vm.asm "        movq    %rax, %xmm0"
         vm.call "double_to_garlicval"
       end
@@ -1749,13 +1827,13 @@ module AST
 
   class TrueVal < Node
     def codegen(vm, program, all_modules)
-      vm.asm "        mov     $2, %rax"
+      vm.asm "        mov     $2, %rax  # #{pos.to_s_within_file}"
     end
   end
 
   class FalseVal < Node
     def codegen(vm, program, all_modules)
-      vm.asm "        mov     $4, %rax"
+      vm.asm "        mov     $4, %rax  # #{pos.to_s_within_file}"
     end
   end
 
@@ -1804,7 +1882,7 @@ module AST
       endname = "#{name}_end"
 
       vm.asm "        jmp     #{endname}"
-      vm.asm "#{name}:"
+      vm.asm "#{name}: # #{pos.to_s_within_file}"
 
       # lambda body
 
@@ -1943,6 +2021,8 @@ module AST
   class If < SpecializedNode
     def codegen(vm, program, all_modules)
       label = vm.genname('if')
+
+      vm.asm "# `if` at #{pos.to_s_within_file}"
 
       @cond.codegen(vm, program, all_modules)
 
